@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analítica y Reportes - ExamSys</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --admin-color: #4b39b3; --prof-color: #2c3e50; }
+        body { background-color: #f8f9fa; }
+        .card-report { border-radius: 15px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .header-status { padding: 20px; border-radius: 15px; color: white; margin-bottom: 30px; }
+        .bg-admin { background: linear-gradient(45deg, #4b39b3, #8271e1); }
+        .bg-prof { background: linear-gradient(45deg, #2c3e50, #4ca1af); }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="container py-5">
+        <div id="headerRole" class="header-status shadow-sm">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="fw-bold mb-0" id="titleReport">Cargando Reportes...</h2>
+                    <p class="mb-0 opacity-75" id="subtitleReport">Sincronizando datos de Firestore</p>
+                </div>
+                <a href="#" id="btnBack" class="btn btn-light">Volver al Panel</a>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-5">
+            <div class="col-md-3">
+                <div class="card card-report p-4 text-center">
+                    <div class="text-muted small fw-bold">TOTAL EXÁMENES</div>
+                    <h2 id="kpiExams" class="fw-bold text-primary">--</h2>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card card-report p-4 text-center">
+                    <div class="text-muted small fw-bold">PROMEDIO GENERAL</div>
+                    <h2 id="kpiAvg" class="fw-bold text-success">--%</h2>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card card-report p-4 text-center">
+                    <div class="text-muted small fw-bold">REACTIVOS CRÍTICOS</div>
+                    <h2 id="kpiCritical" class="fw-bold text-danger">--</h2>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card card-report p-4 text-center">
+                    <div class="text-muted small fw-bold">PARTICIPACIÓN</div>
+                    <h2 id="kpiUsers" class="fw-bold text-warning">--</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <div class="card card-report p-4 h-100">
+                    <h5 class="fw-bold mb-4">Calidad de Reactivos (Dificultad Real)</h5>
+                    <canvas id="questionQualityChart"></canvas>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card card-report p-4 h-100">
+                    <h5 class="fw-bold mb-4">Análisis Detallado de Reactivos</h5>
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Planteamiento</th>
+                                    <th>Aciertos</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reactivosTable">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, query, where, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
+            authDomain: "databaseex-238c7.firebaseapp.com",
+            projectId: "databaseex-238c7",
+            storageBucket: "databaseex-238c7.firebasestorage.app",
+            messagingSenderId: "1013480049532",
+            appId: "1:1013480049532:web:066afa29f8727c7ea332f9"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                window.location.href = "index.html";
+                return;
+            }
+
+            const userSnap = await getDoc(doc(db, "users", user.uid));
+            if (userSnap.exists()) {
+                const userData = userSnap.data();
+                setupDashboard(userData);
+            }
+        });
+
+        function setupDashboard(user) {
+            const is_admin = user.rol === "Administrador";
+            const header = document.getElementById('headerRole');
+            const title = document.getElementById('titleReport');
+            const btnBack = document.getElementById('btnBack');
+
+            if (is_admin) {
+                header.classList.add('bg-admin');
+                title.innerText = "Analítica Global (Admin)";
+                btnBack.href = "dashboard_admin.html";
+                cargarDatosGlobales();
+            } else {
+                header.classList.add('bg-prof');
+                title.innerText = "Analítica de Mis Grupos";
+                btnBack.href = "dashboard_profesor.html";
+                cargarDatosDocente(user.uid);
+            }
+        }
+
+        function cargarDatosGlobales() {
+            // Escuchar todos los exámenes (RF13)
+            onSnapshot(collection(db, "exams"), (snap) => {
+                document.getElementById('kpiExams').innerText = snap.size;
+            });
+
+            // Escuchar todos los reactivos (RF14)
+            onSnapshot(collection(db, "questions"), (snap) => {
+                const table = document.getElementById('reactivosTable');
+                table.innerHTML = '';
+                let criticos = 0;
+                let faciles = 0, medias = 0, dificiles = 0;
+
+                snap.forEach(doc => {
+                    const q = doc.data();
+                    const score = q.aciertosHistoricos || 0;
+                    
+                    if(score < 30) { criticos++; dificiles++; }
+                    else if(score > 80) faciles++;
+                    else medias++;
+
+                    table.innerHTML += `
+                        <tr>
+                            <td class="small">${q.planteamiento.substring(0, 40)}...</td>
+                            <td>${score}%</td>
+                            <td><span class="badge ${score < 30 ? 'bg-danger' : 'bg-success'}">${score < 30 ? 'Crítico' : 'Estable'}</span></td>
+                        </tr>
+                    `;
+                });
+                document.getElementById('kpiCritical').innerText = criticos;
+                updateChart(faciles, medias, dificiles);
+            });
+        }
+
+        // Función para actualizar la gráfica de Pay (Módulo 5)
+        let myChart;
+        function updateChart(f, m, d) {
+            const ctx = document.getElementById('questionQualityChart').getContext('2d');
+            if(myChart) myChart.destroy();
+            myChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Fáciles (>80%)', 'Equilibradas', 'Difíciles (<30%)'],
+                    datasets: [{
+                        data: [f, m, d],
+                        backgroundColor: ['#2ecc71', '#f1c40f', '#e74c3c']
+                    }]
+                }
+            });
+        }
+
+        // Nota: cargarDatosDocente(uid) usaría queries con where("creadoPor", "==", uid)
+    </script>
+</body>
+</html>

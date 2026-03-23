@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro Seguro - ExamSys ISC</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body { background: #f4f7f6; min-height: 100vh; display: flex; align-items: center; padding: 20px 0; }
+        .register-card { max-width: 600px; width: 100%; border: none; border-radius: 15px; }
+        .btn-success { background-color: #27ae60; border: none; }
+        /* Estilos para la Cámara (Módulo 1: Seguridad) */
+        #camera-container { width: 100%; max-width: 400px; margin: 0 auto 20px auto; border: 2px solid #ccc; border-radius: 10px; overflow: hidden; position: relative; display: none; /* Oculto por defecto */ }
+        #video { width: 100%; height: auto; display: block; background: black; }
+        #photo-preview { width: 100%; height: auto; display: none; border-radius: 10px; margin-top: 10px; border: 2px solid #27ae60; }
+        #canvas { display: none; } /* Lienzo oculto para procesar la captura */
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="card register-card shadow-lg p-4">
+                <div class="text-center mb-4">
+                    <h2 class="fw-bold text-primary">Crear Cuenta Segura</h2>
+                    <p class="text-muted small">Únete a la plataforma de evaluaciones del ISC</p>
+                </div>
+
+                <form id="registerForm">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nombre Completo</label>
+                            <input type="text" id="nombre" class="form-control" placeholder="Ej. Juan Pérez" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Correo Institucional</label>
+                            <input type="email" id="email" class="form-control" placeholder="usuario@tecnm.mx" required>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Contraseña</label>
+                            <input type="password" id="password" class="form-control" placeholder="••••••••" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Confirmar Contraseña</label>
+                            <input type="password" id="confirmPassword" class="form-control" placeholder="••••••••" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label d-block fw-bold text-primary">Tipo de Usuario (Rol)</label>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="rol" id="rolEstudiante" value="Estudiante" checked>
+                            <label class="form-check-label" for="rolEstudiante">Estudiante</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="rol" id="rolDocente" value="Docente">
+                            <label class="form-check-label" for="rolDocente">Docente</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="rol" id="rolAdmin" value="Administrador">
+                            <label class="form-check-label" for="rolAdmin">Administrador</label>
+                        </div>
+                    </div>
+
+                    <div id="photo-section" class="mb-4 text-center">
+                        <label class="form-label d-block fw-bold text-success"><i class="bi bi-camera me-2"></i>Captura de Perfil (Requerido)</label>
+                        
+                        <div id="camera-container">
+                            <video id="video" autoplay playsinline></video>
+                        </div>
+                        
+                        <canvas id="canvas" width="640" height="480"></canvas>
+                        <img id="photo-preview" alt="Vista previa de perfil">
+                        
+                        <div class="d-flex justify-content-center gap-2 mt-2">
+                            <button type="button" id="btn-start-camera" class="btn btn-sm btn-outline-primary"><i class="bi bi-camera-video me-1"></i>Iniciar Cámara</button>
+                            <button type="button" id="btn-take-photo" class="btn btn-sm btn-success" disabled><i class="bi bi-camera-fill me-1"></i>Tomar Foto</button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 py-2 mb-3 shadow">Registrarse</button>
+
+                    <div class="text-center">
+                        <span class="small text-muted">¿Ya tienes cuenta? <a href="index.html" class="text-decoration-none">Inicia sesión</a></span>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
+            authDomain: "databaseex-238c7.firebaseapp.com",
+            projectId: "databaseex-238c7",
+            storageBucket: "databaseex-238c7.firebasestorage.app",
+            messagingSenderId: "1013480049532",
+            appId: "1:1013480049532:web:066afa29f8727c7ea332f9"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Variables de la Cámara
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const photoPreview = document.getElementById('photo-preview');
+        const btnStart = document.getElementById('btn-start-camera');
+        const btnTake = document.getElementById('btn-take-photo');
+        const cameraContainer = document.getElementById('camera-container');
+        const photoSection = document.getElementById('photo-section');
+        let stream;
+        let fotoBase64 = null; // Variable para guardar la imagen final
+
+        // Lógica para mostrar/ocultar sección de fotosegún Rol
+        document.querySelectorAll('input[name="rol"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.value === 'Administrador') {
+                    photoSection.style.display = 'none'; // Ocultar para Admin
+                    fotoBase64 = null; // Resetear foto
+                    stopCamera();
+                } else {
+                    photoSection.style.display = 'block'; // Mostrar para Docente/Estudiante
+                }
+            });
+        });
+
+        // Función para Iniciar Cámara (Módulo 1)
+        btnStart.addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                video.srcObject = stream;
+                cameraContainer.style.display = 'block';
+                photoPreview.style.display = 'none';
+                btnTake.disabled = false;
+                btnStart.innerText = "Reiniciar Cámara";
+            } catch (err) {
+                console.error("Error accediendo a la cámara: ", err);
+                alert("No se pudo acceder a la cámara. Asegúrate de dar permisos.");
+            }
+        });
+
+        // Función para Tomar Foto (Captura de biometría facial)
+        btnTake.addEventListener('click', () => {
+            const context = canvas.getContext('2d');
+            // Dibujar el cuadro actual del video en el lienzo
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // Convertir el lienzo a una imagen Base64 (formato texto)
+            fotoBase64 = canvas.toDataURL('image/jpeg', 0.8); // 80% calidad
+            
+            // Mostrar vista previa y ocultar cámara
+            photoPreview.src = fotoBase64;
+            photoPreview.style.display = 'block';
+            cameraContainer.style.display = 'none';
+            stopCamera();
+        });
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        }
+
+        // Lógica de Registro (actualizada con foto)
+        const registerForm = document.getElementById('registerForm');
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const nombre = document.getElementById('nombre').value;
+            const rol = document.querySelector('input[name="rol"]:checked').value;
+
+            if (password !== confirmPassword) {
+                alert("Las contraseñas no coinciden, Piter.");
+                return;
+            }
+
+            // Validación de Foto (solo para Estudiante/Docente)
+            if (rol !== 'Administrador' && !fotoBase64) {
+                alert("Por favor, toma una foto de perfil para continuar.");
+                return;
+            }
+
+            try {
+                // 1. Crear usuario en Firebase Auth
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+
+                // 2. Guardar datos adicionales en Firestore (incluyendo la foto)
+                await setDoc(doc(db, "users", user.uid), {
+                    nombre: nombre,
+                    correo: email,
+                    rol: rol,
+                    fotoPerfil: fotoBase64, // Aquí guardamos la imagen como texto largo
+                    fechaRegistro: new Date().toISOString()
+                });
+
+                alert("Usuario registrado exitosamente como " + rol + " con foto de perfil.");
+                window.location.href = "index.html";
+            } catch (error) {
+                alert("Error al registrar: " + error.message);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurar Examen - Docente</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        .rule-card {
+            border-top: 4px solid #f1c40f;
+        }
+
+        .question-item {
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .question-item:hover {
+            background-color: #e9ecef;
+        }
+
+        .selected-q {
+            border-left: 5px solid #2ecc71 !important;
+            background-color: #f0fff4;
+        }
+    </style>
+</head>
+
+<body class="bg-light">
+
+    <div class="container py-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-file-earmark-medical me-2"></i>Configurar Nuevo Examen</h2>
+            <a href="dashboard_profesor.html" class="btn btn-outline-secondary btn-sm">Cancelar</a>
+        </div>
+
+        <form id="examForm">
+            <div class="row">
+                <div class="col-lg-4">
+                    <div class="card shadow-sm rule-card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title mb-3">Reglas de Aplicación</h5>
+
+                            <div class="mb-3">
+                                <label class="form-label">Título del Examen</label>
+                                <input type="text" id="tituloExamen" class="form-control" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Fecha de Disponibilidad</label>
+                                <input type="datetime-local" id="fechaDisponibilidad" class="form-control" required>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Límite (Minutos)</label>
+                                    <input type="number" id="limiteTiempo" class="form-control" value="60" required>
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Intentos</label>
+                                    <input type="number" id="intentos" class="form-control" value="1" required>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Retroalimentación</label>
+                                <select id="retroal" class="form-select">
+                                    <option value="inmediata">Inmediata al terminar</option>
+                                    <option value="post_cierre">Después de fecha de cierre</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100 py-3 shadow">Publicar Examen</button>
+                </div>
+
+                <div class="col-lg-8">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Selección de Preguntas del Banco</h5>
+                            <span class="badge bg-primary" id="countSelected">0 Seleccionadas</span>
+                        </div>
+                        <div class="card-body">
+                            <div id="bancoParaSeleccion" class="list-group">
+                                <p class="text-center">Cargando reactivos...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        // 1. CORRECCIÓN: Quitamos getAuth de aquí, solo dejamos lo de Firestore
+        import { getFirestore, collection, addDoc, onSnapshot, query } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        // 2. CORRECCIÓN: Importamos getAuth y onAuthStateChanged correctamente
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        const firebaseConfig = {
+            apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
+            authDomain: "databaseex-238c7.firebaseapp.com",
+            projectId: "databaseex-238c7",
+            storageBucket: "databaseex-238c7.firebasestorage.app",
+            messagingSenderId: "1013480049532",
+            appId: "1:1013480049532:web:066afa29f8727c7ea332f9"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                console.log("Usuario autenticado, cargando banco...");
+                cargarBancoPreguntas();
+            } else {
+                alert("Debes iniciar sesión primero.");
+                window.location.href = "login.html";
+            }
+        });
+
+        let preguntasSeleccionadas = [];
+
+        function cargarBancoPreguntas() {
+            onSnapshot(collection(db, "questions"), (snapshot) => {
+                const contenedor = document.getElementById('bancoParaSeleccion');
+                contenedor.innerHTML = '';
+
+                if (snapshot.empty) {
+                    contenedor.innerHTML = '<p class="text-center text-muted">No hay preguntas en el banco.</p>';
+                    return;
+                }
+
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const qDiv = document.createElement('div');
+                    qDiv.className = 'list-group-item list-group-item-action question-item';
+                    qDiv.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>${data.planteamiento}</span>
+                        <span class="badge bg-info text-dark">${data.categoria}</span>
+                    </div>
+                `;
+                    qDiv.onclick = () => {
+                        if (preguntasSeleccionadas.includes(doc.id)) {
+                            preguntasSeleccionadas = preguntasSeleccionadas.filter(id => id !== doc.id);
+                            qDiv.classList.remove('selected-q');
+                        } else {
+                            preguntasSeleccionadas.push(doc.id);
+                            qDiv.classList.add('selected-q');
+                        }
+                        document.getElementById('countSelected').innerText = preguntasSeleccionadas.length + " Seleccionadas";
+                    };
+                    contenedor.appendChild(qDiv);
+                });
+            });
+        }
+
+        // Guardar Examen en Firestore (Colección exams)
+        document.getElementById('examForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (preguntasSeleccionadas.length === 0) {
+                alert("Debes seleccionar al menos una pregunta.");
+                return;
+            }
+
+            try {
+                await addDoc(collection(db, "exams"), {
+                    titulo: document.getElementById('tituloExamen').value,
+                    fechaInicio: document.getElementById('fechaDisponibilidad').value,
+                    limiteMinutos: document.getElementById('limiteTiempo').value,
+                    intentosMaximos: document.getElementById('intentos').value,
+                    tipoRetro: document.getElementById('retroal').value,
+                    preguntasIDs: preguntasSeleccionadas,
+                    creadoPor: auth.currentUser.uid, // Usa el ID real del profesor logueado
+                    fechaCreacion: new Date().toISOString()
+                });
+                alert("Examen publicado correctamente");
+                window.location.href = "dashboard_profesor.html";
+            } catch (error) {
+                console.error("Error al publicar examen: ", error);
+            }
+        });
+    </script>
+
+</body>
+
+</html>
