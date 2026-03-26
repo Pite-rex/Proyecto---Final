@@ -110,13 +110,16 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
+        let docenteUID = null;
+
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 console.log("Usuario autenticado, cargando banco...");
+                docenteUID = user.uid;
                 cargarBancoPreguntas();
             } else {
                 alert("Debes iniciar sesión primero.");
-                window.location.href = "login.html";
+                window.location.href = "index.html";
             }
         });
 
@@ -166,21 +169,27 @@
                 return;
             }
 
+            if (!docenteUID) {
+                alert("Error de sesión: No se pudo identificar tu usuario docente. Por favor, recarga la página e intenta de nuevo.");
+                return;
+            }
+
             try {
                 await addDoc(collection(db, "exams"), {
                     titulo: document.getElementById('tituloExamen').value,
                     fechaInicio: document.getElementById('fechaDisponibilidad').value,
-                    limiteMinutos: document.getElementById('limiteTiempo').value,
-                    intentosMaximos: document.getElementById('intentos').value,
+                    limiteMinutos: parseInt(document.getElementById('limiteTiempo').value, 10),
+                    intentosMaximos: parseInt(document.getElementById('intentos').value, 10),
                     tipoRetro: document.getElementById('retroal').value,
                     preguntasIDs: preguntasSeleccionadas,
-                    creadoPor: auth.currentUser.uid, // Usa el ID real del profesor logueado
+                    creadoPor: docenteUID, 
                     fechaCreacion: new Date().toISOString()
                 });
                 alert("Examen publicado correctamente");
                 window.location.href = "dashboard_profesor.html";
             } catch (error) {
                 console.error("Error al publicar examen: ", error);
+                alert("Hubo un error al guardar el examen: " + error.message);
             }
         });
     </script>
