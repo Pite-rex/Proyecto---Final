@@ -129,7 +129,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, where, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, where, doc, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -289,9 +289,92 @@
             }
         });
 
-        // Placeholder para cargarDatosDocente
-        function cargarDatosDocente(uid) {
-            console.log("Cargando datos del docente:", uid);
+        // Cargar datos exclusivamente de los grupos/alumnos del profesor
+        async function cargarDatosDocente(uid) {
+            // 1. Obtener nombres de los alumnos para la tabla
+            const usersSnap = await getDocs(collection(db, "users"));
+            const usersMap = {};
+            usersSnap.forEach(u => usersMap[u.id] = u.data().nombre || "Estudiante");
+
+            // 2. Obtener solo los exámenes creados por este maestro
+            const qExams = query(collection(db, "exams"), where("creadoPor", "==", uid));
+            
+            onSnapshot(qExams, async (examSnap) => {
+                const examsMap = {};
+                examSnap.forEach(doc => examsMap[doc.id] = doc.data().titulo || "Examen");
+                const teacherExamIds = Object.keys(examsMap);
+
+                document.getElementById('kpiExams').innerText = teacherExamIds.length;
+
+                // Adaptar visualmente el DOM para el perfil del maestro
+                const tarjetasKpi = document.querySelectorAll('.text-muted.small.fw-bold');
+                if(tarjetasKpi.length >= 4) {
+                    tarjetasKpi[2].innerText = "ALUMNOS REPROBADOS";
+                    tarjetasKpi[3].innerText = "EXÁMENES ENTREGADOS";
+                }
+                document.querySelector('.col-lg-6:nth-child(2) h5').innerText = "Calificaciones de Alumnos";
+                document.querySelector('.table-light').innerHTML = '<tr><th>Alumno</th><th>Examen</th><th>Calificación</th><th>Estado</th></tr>';
+                document.querySelector('.col-lg-6:first-child h5').innerText = "Proporción de Aprobación";
+
+                if (teacherExamIds.length === 0) {
+                    document.getElementById('reactivosTable').innerHTML = '<tr><td colspan="4" class="text-center text-muted">Aún no has creado ningún examen.</td></tr>';
+                    return;
+                }
+
+                // 3. Obtener resultados y filtrar los que pertenecen a sus exámenes
+                onSnapshot(collection(db, "results"), (resultsSnap) => {
+                    let totalScore = 0, finalizados = 0, reprobados = 0, aprobados = 0;
+                    const table = document.getElementById('reactivosTable');
+                    table.innerHTML = '';
+
+                    resultsSnap.forEach(docRes => {
+                        const res = docRes.data();
+                        
+                        if (teacherExamIds.includes(res.ID_examen) && res.estado === "finalizado") {
+                            finalizados++;
+                            let score = parseFloat(res.calificacionFinal) || 0;
+                            if (isNaN(score)) score = 0;
+                            totalScore += score;
+
+                            if (res.calificacionFinal !== "Pendiente") {
+                                if (score < 70) reprobados++; else aprobados++;
+                            }
+
+                            const badgeClass = res.calificacionFinal === "Pendiente" ? 'bg-warning text-dark' : (score >= 70 ? 'bg-success' : 'bg-danger');
+                            const statusText = res.calificacionFinal === "Pendiente" ? 'Pendiente' : (score >= 70 ? 'Aprobado' : 'Reprobado');
+                            const studentName = usersMap[res.ID_estudiante] || "ID: " + res.ID_estudiante.substring(0,5);
+                            const examName = examsMap[res.ID_examen] || "Examen";
+
+                            table.innerHTML += `
+                                <tr>
+                                    <td class="small fw-bold"><i class="bi bi-person-circle text-primary me-1"></i> ${studentName}</td>
+                                    <td class="small">${examName}</td>
+                                    <td class="fw-bold">${res.calificacionFinal}${res.calificacionFinal !== "Pendiente" ? '%' : ''}</td>
+                                    <td><span class="badge ${badgeClass}">${statusText}</span></td>
+                                </tr>
+                            `;
+                        }
+                    });
+
+                    if (finalizados === 0) table.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Aún no hay resultados de alumnos.</td></tr>';
+
+                    // Actualizar KPIs del Docente
+                    document.getElementById('kpiUsers').innerText = finalizados;
+                    document.getElementById('kpiCritical').innerText = reprobados;
+                    document.getElementById('kpiAvg').innerText = (finalizados > 0 ? Math.round(totalScore / finalizados) : 0) + "%";
+
+                    // Actualizar Gráfica para Aprobados vs Reprobados
+                    const ctx = document.getElementById('questionQualityChart').getContext('2d');
+                    if (myChart) myChart.destroy();
+                    myChart = new Chart(ctx, {
+                        type: 'pie',
+                        data: {
+                            labels: ['Aprobados (>= 70%)', 'Reprobados (< 70%)'],
+                            datasets: [{ data: [aprobados, reprobados], backgroundColor: ['#2ecc71', '#e74c3c'] }]
+                        }
+                    });
+                });
+            });
         }
     </script>
 </body>
