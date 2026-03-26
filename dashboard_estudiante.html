@@ -7,9 +7,9 @@
     <title>Panel Estudiante - ExamSys</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-  
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode.js/1.5.3/qrcode.min.js"></script>
-    
+
     <style>
         :root {
             --student-blue: #34495e;
@@ -189,7 +189,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        
+
         const firebaseConfig = {
             apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
             authDomain: "databaseex-238c7.firebaseapp.com",
@@ -206,22 +206,26 @@
         let currentUser = null;
 
         onAuthStateChanged(auth, (user) => {
-    if (!user) {
-        window.location.href = "index.html";
-    } else {
-        currentUser = user;
-        document.getElementById('userIdDisplay').innerText = user.email;
-        document.getElementById('profileEmail').innerText = user.email;
-        document.getElementById('profileUID').innerText = user.uid.substring(0, 25) + '...';
+            if (!user) {
+                window.location.href = "index.html";
+            } else {
+                currentUser = user;
+                document.getElementById('userIdDisplay').innerText = user.email;
+                document.getElementById('profileEmail').innerText = user.email;
+                document.getElementById('profileUID').innerText = user.uid.substring(0, 25) + '...';
 
-        // Generar QR con datos del estudiante
-        generarQR(user);
+                // Generar QR con datos del estudiante
+                try {
+                    generarQR(user);
+                } catch (e) {
+                    console.warn("Error al generar QR:", e);
+                }
 
-        // AQUÍ PASA EL user A cargarExamenes
-        cargarExamenes(user); 
-        cargarResultados(user.uid);
-    }
-});
+                // AQUÍ PASA EL user A cargarExamenes
+                cargarExamenes(user);
+                cargarResultados(user.uid);
+            }
+        });
 
         // Función para generar QR con datos del perfil
         function generarQR(user) {
@@ -261,41 +265,65 @@
 
         // Cargar exámenes publicados
         async function cargarExamenes(user) {
-            const qResultados = query(collection(db, "results"), where("ID_estudiante", "==", user.uid));
-            const querySnapshotResultados = await getDocs(qResultados);
-            const examenesCompletados = [];
-            querySnapshotResultados.forEach((doc) => {
-                examenesCompletados.push(doc.data().ID_examen);
-            });
-
-            onSnapshot(collection(db, "exams"), (snapshot) => {
-                const container = document.getElementById('listaExamenesDisponibles');
-                container.innerHTML = '';
-
-                let hayExamenes = false;
-
-                snapshot.forEach((doc) => {
-                    const examID = doc.id;
-                    const examen = doc.data();
-
-                    if (!examenesCompletados.includes(examID)) {
-                        hayExamenes = true;
-                        container.innerHTML += `
-                    <div class="col-md-6">
-                        <div class="card exam-card shadow-sm p-4 bg-white h-100">
-                            <h6 class="fw-bold text-primary">${examen.titulo}</h6>
-                            <p class="small text-muted mb-3"><i class="bi bi-clock me-1"></i> Duración: ${examen.limiteMinutos} min</p>
-                            <a href="ejecucion_examen.html?id=${examID}" class="btn btn-primary w-100 mt-auto">Comenzar</a>
-                        </div>
-                    </div>
-                `;
+            try {
+                const qResultados = query(collection(db, "results"), where("ID_estudiante", "==", user.uid));
+                const querySnapshotResultados = await getDocs(qResultados);
+                const examenesCompletados = [];
+                const examenesEnProgreso = [];
+                
+                querySnapshotResultados.forEach((doc) => {
+                    const data = doc.data();
+                    // Diferenciamos los terminados de los que están a medias
+                    if (data.estado === "finalizado") {
+                        examenesCompletados.push(data.ID_examen);
+                    } else if (data.estado === "en_progreso") {
+                        examenesEnProgreso.push(data.ID_examen);
                     }
                 });
 
-                if (!hayExamenes) {
-                    container.innerHTML = '<div class="alert alert-info w-100">No tienes exámenes pendientes por ahora.</div>';
-                }
-            });
+                onSnapshot(collection(db, "exams"), (snapshot) => {
+                    const container = document.getElementById('listaExamenesDisponibles');
+                    container.innerHTML = '';
+
+                    let hayExamenes = false;
+
+                    snapshot.forEach((doc) => {
+                        const examID = doc.id;
+                        const examen = doc.data();
+
+                        // Solo lo ocultamos si está REALMENTE completado
+                        if (!examenesCompletados.includes(examID)) {
+                            hayExamenes = true;
+                            const titulo = examen.titulo || "Examen sin título";
+                            const limite = examen.limiteMinutos || "N/A";
+                            
+                            // Revisamos si el estudiante lo dejó a medias
+                            const enProgreso = examenesEnProgreso.includes(examID);
+                            const btnText = enProgreso ? "Continuar Examen" : "Comenzar";
+                            const btnClass = enProgreso ? "btn-warning" : "btn-primary";
+                            
+                            container.innerHTML += `
+                        <div class="col-md-6">
+                            <div class="card exam-card shadow-sm p-4 bg-white h-100 border-start border-4 ${enProgreso ? 'border-warning' : 'border-primary'}">
+                                <h6 class="fw-bold text-primary">${titulo}</h6>
+                                <p class="small text-muted mb-3"><i class="bi bi-clock me-1"></i> Duración: ${limite} min</p>
+                                <a href="ejecucion_examen.html?id=${examID}" class="btn ${btnClass} w-100 mt-auto">${btnText}</a>
+                            </div>
+                        </div>
+                    `;
+                        }
+                    });
+
+                    if (!hayExamenes) {
+                        container.innerHTML = '<div class="alert alert-info w-100">No tienes exámenes pendientes por ahora.</div>';
+                    }
+                }, (error) => {
+                    console.error("Error al obtener exámenes:", error);
+                    document.getElementById('listaExamenesDisponibles').innerHTML = '<div class="alert alert-danger w-100">Error al cargar exámenes. Revisa la conexión.</div>';
+                });
+            } catch (error) {
+                console.error("Error general en cargarExamenes:", error);
+            }
         }
 
         // Cargar calificaciones
@@ -304,16 +332,25 @@
             onSnapshot(q, (snapshot) => {
                 const list = document.getElementById('listaResultados');
                 list.innerHTML = '';
-                if (snapshot.empty) list.innerHTML = '<div class="list-group-item small text-muted">Aún no tienes exámenes finalizados.</div>';
+                let hayFinalizados = false;
+                
                 snapshot.forEach((doc) => {
                     const res = doc.data();
-                    list.innerHTML += `
-                        <a href="revision_resultados.html?id=${doc.id}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                            <span>Examen Finalizado</span>
-                            <span class="badge bg-success rounded-pill">${res.calificacionFinal || 'Pendiente'}</span>
-                        </a>
-                    `;
+                    // Mostrar calificaciones solo si el examen fue entregado
+                    if (res.estado === "finalizado") {
+                        hayFinalizados = true;
+                        list.innerHTML += `
+                            <a href="revision_resultados.html?id=${doc.id}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                <span>Examen Finalizado</span>
+                                <span class="badge bg-success rounded-pill">${res.calificacionFinal || 'Pendiente'}</span>
+                            </a>
+                        `;
+                    }
                 });
+                
+                if (!hayFinalizados) {
+                    list.innerHTML = '<div class="list-group-item small text-muted">Aún no tienes exámenes finalizados.</div>';
+                }
             });
         }
 
