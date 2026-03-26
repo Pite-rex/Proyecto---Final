@@ -8,8 +8,6 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode.js/1.5.3/qrcode.min.js"></script>
-
     <style>
         :root {
             --student-blue: #34495e;
@@ -41,50 +39,23 @@
             margin-bottom: 30px;
         }
 
-        /* ESTILOS PARA LA TARJETA DE PERFIL CON QR */
         .profile-card {
             background: white;
             border-radius: 15px;
             padding: 25px;
-            text-align: center;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
         }
 
-        .profile-header {
-            margin-bottom: 20px;
-        }
-
         .profile-header i {
-            font-size: 48px;
+            font-size: 40px;
             color: var(--student-blue);
-            margin-bottom: 10px;
-        }
-
-        .profile-header h6 {
-            color: var(--student-blue);
-            font-weight: 700;
-        }
-
-        #qrCode {
-            display: flex;
-            justify-content: center;
-            margin: 20px 0;
-        }
-
-        #qrCode canvas {
-            border: 3px solid var(--student-blue);
-            border-radius: 8px;
-            padding: 10px;
-            background: white;
         }
 
         .profile-info {
-            text-align: left;
             background: #f8f9fa;
             padding: 15px;
             border-radius: 10px;
-            margin-top: 15px;
             font-size: 13px;
         }
 
@@ -97,23 +68,6 @@
 
         .profile-info-item:last-child {
             border-bottom: none;
-        }
-
-        .profile-info-label {
-            font-weight: 600;
-            color: var(--student-blue);
-        }
-
-        .profile-info-value {
-            word-break: break-all;
-            color: #555;
-            text-align: right;
-            max-width: 60%;
-        }
-
-        .btn-download-qr {
-            margin-top: 15px;
-            width: 100%;
         }
     </style>
 </head>
@@ -132,11 +86,10 @@
             <div class="row align-items-center">
                 <div class="col-md-8">
                     <h2 class="fw-bold mb-1">¡Hola, Estudiante!</h2>
-                    <p class="text-muted">Aquí puedes ver tus exámenes programados y tus notas finales.</p>
+                    <p class="text-muted">Gestiona tus evaluaciones y revisa tus resultados aquí.</p>
                 </div>
                 <div class="col-md-4 text-md-end">
-                    <span class="badge bg-light text-dark p-2 border">ID: <span
-                            id="userIdDisplay">Cargando...</span></span>
+                    <span class="badge bg-light text-dark p-2 border">Sesión activa</span>
                 </div>
             </div>
         </div>
@@ -145,42 +98,32 @@
             <div class="col-lg-8">
                 <h5 class="fw-bold mb-4 text-uppercase small text-muted">Evaluaciones Pendientes</h5>
                 <div id="listaExamenesDisponibles" class="row g-3">
+                    <div class="text-center p-5">Cargando exámenes...</div>
                 </div>
             </div>
 
             <div class="col-lg-4">
-                <!-- TARJETA DE PERFIL CON QR -->
                 <div class="profile-card">
-                    <div class="profile-header">
-                        <i class="bi bi-person-circle"></i>
-                        <h6 class="mb-0">Mi Perfil</h6>
+                    <div class="d-flex align-items-center mb-3">
+                        <i class="bi bi-person-circle me-3"></i>
+                        <h6 class="mb-0 fw-bold">Mi Información</h6>
                     </div>
 
-                    <!-- QR Code generado dinámicamente -->
-                    <div id="qrCode"></div>
-
-                    <!-- Información del estudiante -->
                     <div class="profile-info">
                         <div class="profile-info-item">
-                            <span class="profile-info-label">📧 Email:</span>
-                            <span class="profile-info-value" id="profileEmail">Cargando...</span>
+                            <span class="fw-bold text-muted">Email:</span>
+                            <span id="profileEmail">...</span>
                         </div>
                         <div class="profile-info-item">
-                            <span class="profile-info-label">🔑 UID:</span>
-                            <span class="profile-info-value" id="profileUID" style="font-size: 11px;">Cargando...</span>
+                            <span class="fw-bold text-muted">ID Usuario:</span>
+                            <span id="profileUID" style="font-size: 11px;">...</span>
                         </div>
                     </div>
-
-                    <!-- Botón para descargar QR -->
-                    <button id="btnDescargarQR" class="btn btn-primary btn-download-qr btn-sm">
-                        <i class="bi bi-download me-2"></i>Descargar QR
-                    </button>
                 </div>
 
-                <!-- SECCIÓN DE CALIFICACIONES -->
                 <h5 class="fw-bold mb-4 text-uppercase small text-muted">Tus Calificaciones</h5>
                 <div id="listaResultados" class="list-group shadow-sm">
-                </div>
+                    </div>
             </div>
         </div>
     </div>
@@ -203,153 +146,91 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        let currentUser = null;
-
         onAuthStateChanged(auth, (user) => {
             if (!user) {
                 window.location.href = "index.html";
             } else {
-                currentUser = user;
-                document.getElementById('userIdDisplay').innerText = user.email;
                 document.getElementById('profileEmail').innerText = user.email;
-                document.getElementById('profileUID').innerText = user.uid.substring(0, 25) + '...';
+                document.getElementById('profileUID').innerText = user.uid;
 
-                // Generar QR con datos del estudiante
-                try {
-                    generarQR(user);
-                } catch (e) {
-                    console.warn("Error al generar QR:", e);
-                }
-
-                // AQUÍ PASA EL user A cargarExamenes
                 cargarExamenes(user);
                 cargarResultados(user.uid);
             }
         });
 
-        // Función para generar QR con datos del perfil
-        function generarQR(user) {
-            const qrData = {
-                email: user.email,
-                uid: user.uid,
-                fecha: new Date().toLocaleDateString('es-ES')
-            };
-
-            // Limpiar QR anterior
-            const qrElement = document.getElementById('qrCode');
-            qrElement.innerHTML = '';
-
-            // Generar nuevo QR
-            new QRCode(qrElement, {
-                text: JSON.stringify(qrData),
-                width: 200,
-                height: 200,
-                colorDark: "#34495e",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.H
-            });
-        }
-
-        // Descargar QR
-        document.getElementById('btnDescargarQR').addEventListener('click', function () {
-            if (currentUser) {
-                const canvas = document.querySelector('#qrCode canvas');
-                if (canvas) {
-                    const link = document.createElement('a');
-                    link.href = canvas.toDataURL('image/png');
-                    link.download = `QR_Perfil_${currentUser.email.split('@')[0]}.png`;
-                    link.click();
-                }
-            }
-        });
-
-        // Cargar exámenes publicados
         async function cargarExamenes(user) {
             try {
+                // 1. Obtener estados de los exámenes del usuario
                 const qResultados = query(collection(db, "results"), where("ID_estudiante", "==", user.uid));
                 const querySnapshotResultados = await getDocs(qResultados);
-                const examenesCompletados = [];
-                const examenesEnProgreso = [];
                 
+                const completados = [];
+                const enProgreso = [];
+
                 querySnapshotResultados.forEach((doc) => {
                     const data = doc.data();
-                    // Diferenciamos los terminados de los que están a medias
-                    if (data.estado === "finalizado") {
-                        examenesCompletados.push(data.ID_examen);
-                    } else if (data.estado === "en_progreso") {
-                        examenesEnProgreso.push(data.ID_examen);
-                    }
+                    if (data.estado === "finalizado") completados.push(data.ID_examen);
+                    else if (data.estado === "en_progreso") enProgreso.push(data.ID_examen);
                 });
 
+                // 2. Escuchar cambios en la colección de exámenes
                 onSnapshot(collection(db, "exams"), (snapshot) => {
                     const container = document.getElementById('listaExamenesDisponibles');
                     container.innerHTML = '';
-
                     let hayExamenes = false;
 
                     snapshot.forEach((doc) => {
                         const examID = doc.id;
                         const examen = doc.data();
 
-                        // Solo lo ocultamos si está REALMENTE completado
-                        if (!examenesCompletados.includes(examID)) {
+                        // Mostrar solo si no está finalizado
+                        if (!completados.includes(examID)) {
                             hayExamenes = true;
-                            const titulo = examen.titulo || "Examen sin título";
-                            const limite = examen.limiteMinutos || "N/A";
-                            
-                            // Revisamos si el estudiante lo dejó a medias
-                            const enProgreso = examenesEnProgreso.includes(examID);
-                            const btnText = enProgreso ? "Continuar Examen" : "Comenzar";
-                            const btnClass = enProgreso ? "btn-warning" : "btn-primary";
+                            const esProceso = enProgreso.includes(examID);
                             
                             container.innerHTML += `
-                        <div class="col-md-6">
-                            <div class="card exam-card shadow-sm p-4 bg-white h-100 border-start border-4 ${enProgreso ? 'border-warning' : 'border-primary'}">
-                                <h6 class="fw-bold text-primary">${titulo}</h6>
-                                <p class="small text-muted mb-3"><i class="bi bi-clock me-1"></i> Duración: ${limite} min</p>
-                                <a href="ejecucion_examen.html?id=${examID}" class="btn ${btnClass} w-100 mt-auto">${btnText}</a>
-                            </div>
-                        </div>
-                    `;
+                                <div class="col-md-6">
+                                    <div class="card exam-card shadow-sm p-4 bg-white h-100 border-start border-4 ${esProceso ? 'border-warning' : 'border-primary'}">
+                                        <h6 class="fw-bold text-primary">${examen.titulo || 'Examen'}</h6>
+                                        <p class="small text-muted mb-3"><i class="bi bi-clock me-1"></i> Duración: ${examen.limiteMinutos || 0} min</p>
+                                        <a href="ejecucion_examen.html?id=${examID}" class="btn ${esProceso ? 'btn-warning' : 'btn-primary'} w-100 mt-auto">
+                                            ${esProceso ? 'Continuar Examen' : 'Comenzar'}
+                                        </a>
+                                    </div>
+                                </div>`;
                         }
                     });
 
                     if (!hayExamenes) {
-                        container.innerHTML = '<div class="alert alert-info w-100">No tienes exámenes pendientes por ahora.</div>';
+                        container.innerHTML = '<div class="alert alert-info w-100 text-center">No tienes exámenes pendientes por ahora.</div>';
                     }
-                }, (error) => {
-                    console.error("Error al obtener exámenes:", error);
-                    document.getElementById('listaExamenesDisponibles').innerHTML = '<div class="alert alert-danger w-100">Error al cargar exámenes. Revisa la conexión.</div>';
                 });
             } catch (error) {
-                console.error("Error general en cargarExamenes:", error);
+                console.error("Error en Firestore:", error);
             }
         }
 
-        // Cargar calificaciones
         function cargarResultados(uid) {
             const q = query(collection(db, "results"), where("ID_estudiante", "==", uid));
             onSnapshot(q, (snapshot) => {
                 const list = document.getElementById('listaResultados');
                 list.innerHTML = '';
                 let hayFinalizados = false;
-                
+
                 snapshot.forEach((doc) => {
                     const res = doc.data();
-                    // Mostrar calificaciones solo si el examen fue entregado
                     if (res.estado === "finalizado") {
                         hayFinalizados = true;
                         list.innerHTML += `
                             <a href="revision_resultados.html?id=${doc.id}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                                <span>Examen Finalizado</span>
-                                <span class="badge bg-success rounded-pill">${res.calificacionFinal || 'Pendiente'}</span>
-                            </a>
-                        `;
+                                <span>${res.nombreExamen || 'Examen Finalizado'}</span>
+                                <span class="badge bg-success rounded-pill">${res.calificacionFinal || 0}</span>
+                            </a>`;
                     }
                 });
-                
+
                 if (!hayFinalizados) {
-                    list.innerHTML = '<div class="list-group-item small text-muted">Aún no tienes exámenes finalizados.</div>';
+                    list.innerHTML = '<div class="list-group-item small text-muted text-center">Sin resultados aún.</div>';
                 }
             });
         }
