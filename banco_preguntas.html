@@ -132,6 +132,7 @@
             if (tipo === 'ensayo') {
                 section.style.display = 'none';
                 respuestaCorrecta.required = false;
+                document.querySelectorAll('.opt').forEach(i => i.required = false);
             } else if (tipo === 'verdadero_falso') {
                 section.style.display = 'block';
                 inputsOpciones.style.display = 'none'; // Oculta A, B, C
