@@ -18,208 +18,212 @@
 <body>
 
     <nav class="navbar navbar-dark shadow-sm p-3">
-    <div class="container d-flex justify-content-between">
-        <span class="navbar-brand fw-bold"><i class="bi bi-person-workspace me-2"></i>Panel del Docente</span>
-        <button id="btnLogout" class="btn btn-outline-light btn-sm">Cerrar Sesión</button>
-    </div>
-</nav>
+        <div class="container d-flex justify-content-between">
+            <span class="navbar-brand fw-bold"><i class="bi bi-person-workspace me-2"></i>Panel del Docente</span>
+            <button id="btnLogout" class="btn btn-outline-light btn-sm">Cerrar Sesión</button>
+        </div>
+    </nav>
 
-<div class="container py-5">
-    <div class="row mb-5">
-        <div class="col-12">
-            <h2 class="fw-bold">Bienvenido, Profesor</h2>
-            <p class="text-muted">Gestione sus evaluaciones y analice el progreso de sus alumnos.</p>
+    <div class="container py-5">
+        <div class="row mb-5">
+            <div class="col-12">
+                <h2 class="fw-bold">Bienvenido, Profesor</h2>
+                <p class="text-muted">Gestione sus evaluaciones y analice el progreso de sus alumnos.</p>
+            </div>
         </div>
-    </div>
 
-    <div class="row g-4 mb-5 text-center">
-        <div class="col-md-3">
-            <a href="crear_examen.html" class="text-decoration-none text-dark">
-                <div class="card card-menu p-4 shadow-sm">
-                    <i class="bi bi-file-earmark-plus fs-1 text-primary mb-2"></i>
-                    <h6>Crear Examen</h6>
-                </div>
-            </a>
+        <div class="row g-4 mb-5 text-center">
+            <div class="col-md-3">
+                <a href="crear_examen.html" class="text-decoration-none text-dark">
+                    <div class="card card-menu p-4 shadow-sm">
+                        <i class="bi bi-file-earmark-plus fs-1 text-primary mb-2"></i>
+                        <h6>Crear Examen</h6>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-3">
+                <a href="banco_preguntas.html" class="text-decoration-none text-dark">
+                    <div class="card card-menu p-4 shadow-sm">
+                        <i class="bi bi-database-fill fs-1 text-success mb-2"></i>
+                        <h6>Banco de Preguntas</h6>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-3">
+                <a href="calificar_ensayos.html" class="text-decoration-none text-dark">
+                    <div class="card card-menu p-4 shadow-sm">
+                        <i class="bi bi-pencil-square fs-1 text-warning mb-2"></i>
+                        <h6>Calificar Ensayos</h6>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-3">
+                <a href="reportes_analitica.html" class="text-decoration-none text-dark">
+                    <div class="card card-menu p-4 shadow-sm">
+                        <i class="bi bi-graph-up-arrow fs-1 text-info mb-2"></i>
+                        <h6>Analítica</h6>
+                    </div>
+                </a>
+            </div>
         </div>
-        <div class="col-md-3">
-            <a href="banco_preguntas.html" class="text-decoration-none text-dark">
-                <div class="card card-menu p-4 shadow-sm">
-                    <i class="bi bi-database-fill fs-1 text-success mb-2"></i>
-                    <h6>Banco de Preguntas</h6>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-3">
-            <a href="calificar_ensayos.html" class="text-decoration-none text-dark">
-                <div class="card card-menu p-4 shadow-sm">
-                    <i class="bi bi-pencil-square fs-1 text-warning mb-2"></i>
-                    <h6 id="calificarEnsayosTitulo">Calificar Ensayos</h6>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-3">
-            <a href="reportes_analitica.html" class="text-decoration-none text-dark">
-                <div class="card card-menu p-4 shadow-sm">
-                    <i class="bi bi-graph-up-arrow fs-1 text-info mb-2"></i>
-                    <h6>Analítica</h6>
-                </div>
-            </a>
-        </div>
-    </div>
 
-    <div class="card shadow-sm border-0">
-        <div class="card-header bg-white py-3 d-flex justify-content-between">
-            <h5 class="mb-0 fw-bold">Estado de Exámenes (Tiempo Real)</h5>
-            <span class="status-online" id="firestoreStatus"><i class="bi bi-circle-fill me-1"></i> Conectado a Firestore</span>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Examen</th>
-                            <th>Fecha Límite</th>
-                            <th>Estado</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody id="listaExamenes">
-                        </tbody>
-                </table>
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3 d-flex justify-content-between">
+                <h5 class="mb-0 fw-bold">Estado de Exámenes (Tiempo Real)</h5>
+                <span class="status-online"><i class="bi bi-circle-fill me-1"></i> Conectado a Firestore</span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Examen</th>
+                                <th>Fecha Límite</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listaExamenes">
+                            </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore, collection, onSnapshot, query, orderBy, doc as docRef, deleteDoc, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    <!-- Modal para Monitoreo de Examen -->
+    <div class="modal fade" id="modalMonitoreo" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Monitoreo en Vivo</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Estudiantes que están realizando este examen en este momento:</p>
+                    <ul class="list-group" id="listaActivos">
+                        <li class="list-group-item text-center">Cargando...</li>
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    const firebaseConfig = {
-        apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
-        authDomain: "databaseex-238c7.firebaseapp.com",
-        projectId: "databaseex-238c7",
-        storageBucket: "databaseex-238c7.firebasestorage.app",
-        messagingSenderId: "1013480049532",
-        appId: "1:1013480049532:web:066afa29f8727c7ea332f9"
-    };
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, query, doc, deleteDoc, where, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
+        const firebaseConfig = {
+            apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
+            authDomain: "databaseex-238c7.firebaseapp.com",
+            projectId: "databaseex-238c7",
+            storageBucket: "databaseex-238c7.firebasestorage.app",
+            messagingSenderId: "1013480049532",
+            appId: "1:1013480049532:web:066afa29f8727c7ea332f9"
+        };
 
-    // Seguridad: Verificar que el usuario esté logueado
-    onAuthStateChanged(auth, (user) => {
-        if (!user) window.location.href = "index.html";
-    });
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
 
-    // Helpers
-    function escapeHtml(unsafe) {
-        if (unsafe === undefined || unsafe === null) return '';
-        return String(unsafe)
-            .replaceAll('&', '&amp;')
-            .replaceAll('<', '&lt;')
-            .replaceAll('>', '&gt;')
-            .replaceAll('"', '&quot;')
-            .replaceAll("'", '&#039;');
-    }
-
-    function formatDate(value) {
-        if (!value) return 'Sin fecha';
-        try {
-            if (typeof value === 'object' && typeof value.toDate === 'function') {
-                return value.toDate().toLocaleDateString();
-            }
-            const d = new Date(value);
-            if (isNaN(d)) return 'Sin fecha';
-            return d.toLocaleDateString();
-        } catch (e) {
-            return 'Sin fecha';
-        }
-    }
-
-    // Cargar Exámenes en tiempo real
-    const q = query(collection(db, "exams"), orderBy("fechaCreacion", "desc"));
-    const tbody = document.getElementById('listaExamenes');
-
-    onSnapshot(q, (snapshot) => {
-        tbody.innerHTML = '';
-        snapshot.forEach((docSnap) => {
-            const examen = docSnap.data() || {};
-            const id = docSnap.id;
-            const titulo = escapeHtml(examen.titulo ?? 'Sin título');
-            const fecha = formatDate(examen.fechaInicio);
-            const estado = examen.estado ?? 'Activo';
-
-            tbody.innerHTML += `
-                <tr data-id="${id}">
-                    <td>${titulo}</td>
-                    <td>${fecha}</td>
-                    <td><span class="badge bg-success">${escapeHtml(estado)}</span></td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-primary btn-view" data-id="${id}" aria-label="Ver examen"><i class="bi bi-eye"></i></button>
-                        <button class="btn btn-sm btn-outline-danger btn-delete" data-id="${id}" aria-label="Eliminar examen"><i class="bi bi-trash"></i></button>
-                    </td>
-                </tr>
-            `;
+        // Seguridad: Verificar que el usuario esté logueado (Módulo 1)
+        onAuthStateChanged(auth, (user) => {
+            if (!user) window.location.href = "index.html";
         });
-    }, (error) => {
-        console.error('Error en onSnapshot (exams):', error);
-        const status = document.getElementById('firestoreStatus');
-        if (status) {
-            status.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i> Desconectado de Firestore';
-            status.classList.remove('text-success');
-            status.classList.add('text-danger');
-        }
-    });
 
-    // Delegación de eventos para botones Ver / Eliminar
-    tbody.addEventListener('click', async (e) => {
-        const btn = e.target.closest('button');
-        if (!btn) return;
-        const id = btn.dataset.id;
-        if (!id) return;
+        // Cargar Exámenes en tiempo real (Quitamos orderBy para evitar ocultar documentos corruptos/antiguos)
+        const q = query(collection(db, "exams"));
+        onSnapshot(q, (snapshot) => {
+            const tbody = document.getElementById('listaExamenes');
+            tbody.innerHTML = '';
 
-        if (btn.classList.contains('btn-delete')) {
-            const confirmDelete = confirm('¿Eliminar este examen? Esta acción no se puede deshacer.');
-            if (!confirmDelete) return;
-            try {
-                await deleteDoc(docRef(db, 'exams', id));
-                // onSnapshot actualizará la tabla automáticamente
-            } catch (err) {
-                console.error('Error borrando examen:', err);
-                alert('Error al borrar el examen. Revisa la consola para más detalles.');
-            }
-        } else if (btn.classList.contains('btn-view')) {
-            // Redirigir a la página de detalle (asegúrate de implementar ver_examen.html)
-            window.location.href = `ver_examen.html?id=${encodeURIComponent(id)}`;
-        }
-    });
+            const examenes = [];
+            snapshot.forEach((doc) => examenes.push({ id: doc.id, ...doc.data() }));
 
-    // Contador de ensayos pendientes (colección 'essayTasks' con campo 'estado' == 'pendiente')
-    try {
-        const qEnsayos = query(collection(db, 'essayTasks'), where('estado', '==', 'pendiente'));
-        const tituloEnsayos = document.getElementById('calificarEnsayosTitulo');
-        onSnapshot(qEnsayos, (snap) => {
-            const count = snap.size || 0;
-            if (tituloEnsayos) {
-                tituloEnsayos.textContent = `Calificar Ensayos (${count})`;
-            }
-            // También podrías mostrar un mensaje en otra parte si count === 0
-        }, (err) => {
-            console.error('Error en onSnapshot (essayTasks):', err);
-            if (tituloEnsayos) tituloEnsayos.textContent = 'Calificar Ensayos (error)';
+            // Ordenamos localmente por fecha de creación (los más recientes primero)
+            examenes.sort((a, b) => new Date(b.fechaCreacion || 0) - new Date(a.fechaCreacion || 0));
+
+            examenes.forEach((examen) => {
+                const titulo = examen.titulo || "Examen sin título";
+                const fecha = examen.fechaInicio ? new Date(examen.fechaInicio).toLocaleDateString() : "Sin fecha";
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${titulo}</td>
+                        <td>${fecha}</td>
+                        <td><span class="badge bg-success">Activo</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="monitorearExamen('${examen.id}')" title="Monitorear"><i class="bi bi-eye"></i></button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="eliminarExamen('${examen.id}')" title="Eliminar"><i class="bi bi-trash"></i></button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }, (error) => {
+            console.error("Error al obtener los exámenes: ", error);
+            alert("No se pudieron cargar los exámenes. Revisa la consola para más detalles.");
         });
-    } catch (e) {
-        console.error('No se pudo inicializar el listener de ensayos:', e);
-    }
 
-    // Cierre de sesión
-    document.getElementById('btnLogout').addEventListener('click', () => {
-        signOut(auth).then(() => window.location.href = "index.html");
-    });
-</script>
+        // Función para eliminar examen
+        window.eliminarExamen = async (id) => {
+            if (confirm("¿Estás seguro de que deseas eliminar este examen? Esta acción no se puede deshacer.")) {
+                try {
+                    await deleteDoc(doc(db, "exams", id));
+                } catch (error) {
+                    console.error("Error al eliminar examen:", error);
+                    alert("Hubo un error al eliminar: " + error.message);
+                }
+            }
+        };
 
+        // Función para ver quién está haciendo el examen
+        window.monitorearExamen = (id) => {
+            const modal = new bootstrap.Modal(document.getElementById('modalMonitoreo'));
+            modal.show();
+            const listaActivos = document.getElementById('listaActivos');
+            listaActivos.innerHTML = '<li class="list-group-item text-center">Buscando estudiantes activos...</li>';
+            
+            const qActivos = query(collection(db, "results"), where("ID_examen", "==", id), where("estado", "==", "en_progreso"));
+            
+            onSnapshot(qActivos, async (snapshot) => {
+                if (snapshot.empty) {
+                    listaActivos.innerHTML = '<li class="list-group-item text-center text-muted">No hay estudiantes realizando este examen ahora mismo.</li>';
+                    return;
+                }
+                
+                listaActivos.innerHTML = '';
+                for (const docRes of snapshot.docs()) {
+                    const data = docRes.data();
+                    let nombreAlumno = "Alumno (UID: " + data.ID_estudiante.substring(0, 5) + "...)";
+                    
+                    // Obtener nombre del alumno en base a su ID
+                    try {
+                        const userDoc = await getDoc(doc(db, "users", data.ID_estudiante));
+                        if (userDoc.exists()) nombreAlumno = userDoc.data().nombre;
+                    } catch (e) { console.warn("No se pudo obtener el nombre del alumno", e); }
+                    
+                    listaActivos.innerHTML += `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-person-circle text-primary me-2"></i> ${nombreAlumno}</span>
+                            <span class="badge bg-warning text-dark rounded-pill ms-auto shadow-sm">En línea</span>
+                        </li>
+                    `;
+                }
+            }, (error) => {
+                console.error("Error monitoreando:", error);
+                listaActivos.innerHTML = '<li class="list-group-item text-center text-danger">Error al cargar datos de monitoreo.</li>';
+            });
+        };
+
+        // Cierre de sesión
+        document.getElementById('btnLogout').addEventListener('click', () => {
+            signOut(auth).then(() => window.location.href = "index.html");
+        });
+    </script>
 </body>
 </html>
