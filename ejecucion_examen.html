@@ -1,14 +1,420 @@
-<html>
+<!DOCTYPE html>
+<html lang="es">
+
 <head>
-    <title>Examen</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Examen en Progreso - ExamSys</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f0f2f5;
+            user-select: none;
+        }
+
+        #timer-sticky {
+            position: sticky;
+            top: 10px;
+            z-index: 1000;
+        }
+
+        .pregunta-card {
+            border-radius: 12px;
+            border: none;
+            margin-bottom: 20px;
+        }
+
+        .timer-badge {
+            font-size: 18px;
+            padding: 15px 20px;
+        }
+
+        .timer-badge.warning {
+            background-color: #ffc107 !important;
+            color: #000;
+        }
+
+        .timer-badge.danger {
+            background-color: #dc3545 !important;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .progress-examen {
+            height: 8px;
+            margin-top: 20px;
+        }
+
+        .question-number {
+            background: #34495e;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .form-check-input:checked {
+            background-color: #34495e;
+            border-color: #34495e;
+        }
+
+        .btn-submit {
+            background-color: #27ae60;
+            border: none;
+            font-weight: 600;
+            padding: 12px 30px;
+            font-size: 16px;
+        }
+
+        .btn-submit:hover {
+            background-color: #229954;
+            color: white;
+        }
+
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+
+        .modal-content {
+            border-radius: 15px;
+            border: none;
+        }
+
+        .alert-warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+        }
+    </style>
 </head>
+
 <body>
-    <script>
-        // Importing necessary functions
-        import { query, where, getDocs } from "firebase/firestore";
-        
-        // Your existing JavaScript code
-        // ...
+
+    <div class="container py-4">
+        <!-- Timer Sticky -->
+        <div id="timer-sticky" class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <span class="question-number" id="questionCounter">Pregunta 0/0</span>
+            </div>
+            <div class="badge bg-danger timer-badge p-3 shadow-sm">
+                <i class="bi bi-clock me-2"></i> Tiempo restante: <span id="time">00:00</span>
+            </div>
+        </div>
+
+        <!-- Barra de progreso -->
+        <div class="progress progress-examen mb-4">
+            <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <!-- Título del examen -->
+                <div class="card shadow-sm mb-4 border-0">
+                    <div class="card-body">
+                        <h3 id="tituloExamen" class="fw-bold mb-2">Cargando evaluación...</h3>
+                        <p class="text-muted small mb-0">
+                            <i class="bi bi-info-circle me-1"></i>
+                            El progreso se guarda automáticamente cada minuto. No cierres la pestaña.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Formulario con preguntas -->
+                <form id="quizForm">
+                    <div id="contenedorPreguntas">
+                        <div class="text-center text-muted">
+                            <div class="spinner-border mb-3" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                            <p>Cargando preguntas del examen...</p>
+                        </div>
+                    </div>
+
+                    <!-- Botón enviar -->
+                    <div class="d-grid gap-2 mt-5">
+                        <button type="submit" class="btn btn-submit btn-lg shadow">
+                            <i class="bi bi-check-circle me-2"></i>Finalizar y Enviar Examen
+                        </button>
+                        <small class="text-center text-muted mt-2">
+                            Asegúrate de haber respondido todas las preguntas antes de enviar
+                        </small>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de confirmación -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title fw-bold">⚠️ Confirmar envío</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>¿Estás seguro de que deseas <strong>finalizar y enviar el examen</strong>?</p>
+                    <p class="text-danger small mb-0">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        Una vez enviado, <strong>no podrás modificar tus respuestas</strong>.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-success" id="btnConfirmSubmit">
+                        Sí, enviar examen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de tiempo agotado -->
+    <div class="modal fade" id="timeoutModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger">
+                    <h5 class="modal-title fw-bold text-white">⏱️ Tiempo Agotado</h5>
+                </div>
+                <div class="modal-body">
+                    <p>Se acabó el tiempo para esta evaluación.</p>
+                    <p class="text-info small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Tu examen será enviado automáticamente con las respuestas que completaste.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, doc, getDoc, updateDoc, setDoc, collection, addDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
+            authDomain: "databaseex-238c7.firebaseapp.com",
+            projectId: "databaseex-238c7",
+            storageBucket: "databaseex-238c7.firebasestorage.app",
+            messagingSenderId: "1013480049532",
+            appId: "1:1013480049532:web:066afa29f8727c7ea332f9"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // Variables globales
+        const urlParams = new URLSearchParams(window.location.search);
+        const examID = urlParams.get('id');
+        let resultID = "";
+        let currentUser = null;
+        let timerInterval = null;
+        let totalQuestions = 0;
+        let currentQuestion = 0;
+
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                window.location.href = "login.html";
+            } else if (examID) {
+                currentUser = user;
+                await cargarExamen(user);
+            } else {
+                alert("No se especificó un examen válido.");
+                window.location.href = "dashboard_estudiante.html";
+            }
+        });
+
+        async function cargarExamen(user) {
+            try {
+                // 1. Obtener datos del examen
+                const examSnap = await getDoc(doc(db, "exams", examID));
+                if (!examSnap.exists()) {
+                    alert("El examen no existe.");
+                    window.location.href = "dashboard_estudiante.html";
+                    return;
+                }
+
+                const examData = examSnap.data();
+                document.getElementById('tituloExamen').innerText = examData.titulo;
+
+                // 2. Verificar si el usuario ya realizó el examen
+                const qVerificar = query(
+                    collection(db, "results"),
+                    where("ID_estudiante", "==", user.uid),
+                    where("ID_examen", "==", examID),
+                    where("estado", "==", "finalizado")
+                );
+
+                const checkSnap = await getDocs(qVerificar);
+                if (!checkSnap.empty) {
+                    alert("⚠️ Ya has realizado este examen anteriormente.\n\nNo puedes realizarlo de nuevo.");
+                    window.location.href = "dashboard_estudiante.html";
+                    return;
+                }
+
+                // 3. Crear registro inicial en resultados
+                const resRef = await addDoc(collection(db, "results"), {
+                    ID_estudiante: user.uid,
+                    ID_examen: examID,
+                    estado: "en_progreso",
+                    fechaInicio: new Date().toISOString(),
+                    respuestasTemporales: {}
+                });
+                resultID = resRef.id;
+
+                // 4. Iniciar cronómetro
+                startTimer(examData.limiteMinutos * 60);
+
+                // 5. Cargar preguntas
+                const contenedor = document.getElementById('contenedorPreguntas');
+                contenedor.innerHTML = '';
+                totalQuestions = examData.preguntasIDs.length;
+
+                for (const pID of examData.preguntasIDs) {
+                    const qSnap = await getDoc(doc(db, "questions", pID));
+                    if (qSnap.exists()) {
+                        const qData = qSnap.data();
+                        currentQuestion++;
+                        renderPregunta(pID, qData, contenedor, currentQuestion, totalQuestions);
+                    }
+                }
+
+                currentQuestion = 0; // Reset para actualizar el contador
+            } catch (e) {
+                console.error("Error cargando examen:", e);
+                alert("Error al cargar el examen. Intenta de nuevo.");
+            }
+        }
+
+        function renderPregunta(id, data, contenedor, numero, total) {
+            const div = document.createElement('div');
+            div.className = 'card pregunta-card shadow-sm p-4';
+
+            let opcionesHTML = '';
+            if (data.tipo === 'opcion_multiple') {
+                data.opciones.forEach((opt, index) => {
+                    const optionId = `${id}_${index}`;
+                    opcionesHTML += `
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="radio" name="${id}" value="${opt}" id="${optionId}" required>
+                        <label class="form-check-label" for="${optionId}">${opt}</label>
+                    </div>`;
+                });
+            } else if (data.tipo === 'verdadero_falso') {
+                opcionesHTML = `
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="radio" name="${id}" value="Verdadero" id="${id}_v" required>
+                    <label class="form-check-label" for="${id}_v">Verdadero</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="${id}" value="Falso" id="${id}_f" required>
+                    <label class="form-check-label" for="${id}_f">Falso</label>
+                </div>`;
+            } else {
+                opcionesHTML = `<textarea name="${id}" class="form-control" rows="4" placeholder="Escribe tu respuesta..." required></textarea>`;
+            }
+
+            div.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <h5 class="mb-0 flex-grow-1">${data.planteamiento}</h5>
+                    <span class="question-number ms-3">Pregunta ${numero}/${total}</span>
+                </div>
+                ${opcionesHTML}
+            `;
+            contenedor.appendChild(div);
+        }
+
+        function startTimer(duration) {
+            let timer = duration;
+            const display = document.getElementById('time');
+            const badge = display.closest('.badge');
+
+            timerInterval = setInterval(() => {
+                let minutes = parseInt(timer / 60, 10);
+                let seconds = parseInt(timer % 60, 10);
+                display.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+
+                // Cambiar color según tiempo restante
+                if (timer < 300) { // Menos de 5 minutos
+                    badge.classList.add('warning');
+                } else {
+                    badge.classList.remove('warning');
+                }
+
+                if (timer < 60) { // Menos de 1 minuto
+                    badge.classList.remove('warning');
+                    badge.classList.add('danger');
+                }
+
+                if (--timer < 0) {
+                    clearInterval(timerInterval);
+                    mostrarModalTiempo();
+                    enviarExamen();
+                }
+            }, 1000);
+        }
+
+        function mostrarModalTiempo() {
+            const modal = new bootstrap.Modal(document.getElementById('timeoutModal'));
+            modal.show();
+        }
+
+        async function enviarExamen() {
+            const formData = new FormData(document.getElementById('quizForm'));
+            const respuestas = Object.fromEntries(formData.entries());
+
+            try {
+                await updateDoc(doc(db, "results", resultID), {
+                    respuestas: respuestas,
+                    estado: "finalizado",
+                    fechaTermino: new Date().toISOString()
+                });
+
+                alert("✅ Examen enviado con éxito.\n\nTus respuestas han sido registradas.");
+                window.location.href = "dashboard_estudiante.html";
+            } catch (error) {
+                console.error("Error al enviar examen:", error);
+                alert("❌ Error al enviar el examen. Intenta de nuevo.");
+            }
+        }
+
+        // Evento del formulario
+        document.getElementById('quizForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
+            confirmModal.show();
+        });
+
+        // Botón confirmar envío
+        document.getElementById('btnConfirmSubmit').addEventListener('click', () => {
+            bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide();
+            enviarExamen();
+        });
+
+        // Guardar progreso automáticamente cada minuto
+        async function guardarProgreso() {
+            if (!resultID) return;
+            const formData = new FormData(document.getElementById('quizForm'));
+            try {
+                await updateDoc(doc(db, "results", resultID), {
+                    respuestasTemporales: Object.fromEntries(formData.entries()),
+                    ultimoGuardado: new Date().toISOString()
+                });
+                console.log("Progreso guardado automáticamente");
+            } catch (error) {
+                console.error("Error guardando progreso:", error);
+            }
+        }
+
+        setInterval(guardarProgreso, 60000); // Cada minuto
     </script>
 </body>
+
 </html>
