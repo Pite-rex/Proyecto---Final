@@ -7,6 +7,9 @@
     <title>Panel Estudiante - ExamSys</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode.js/1.5.3/qrcode.min.js"></script>
+    
     <style>
         :root {
             --student-blue: #34495e;
@@ -36,6 +39,81 @@
             border-radius: 15px;
             padding: 30px;
             margin-bottom: 30px;
+        }
+
+        /* ESTILOS PARA LA TARJETA DE PERFIL CON QR */
+        .profile-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .profile-header {
+            margin-bottom: 20px;
+        }
+
+        .profile-header i {
+            font-size: 48px;
+            color: var(--student-blue);
+            margin-bottom: 10px;
+        }
+
+        .profile-header h6 {
+            color: var(--student-blue);
+            font-weight: 700;
+        }
+
+        #qrCode {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        #qrCode canvas {
+            border: 3px solid var(--student-blue);
+            border-radius: 8px;
+            padding: 10px;
+            background: white;
+        }
+
+        .profile-info {
+            text-align: left;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            font-size: 13px;
+        }
+
+        .profile-info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .profile-info-item:last-child {
+            border-bottom: none;
+        }
+
+        .profile-info-label {
+            font-weight: 600;
+            color: var(--student-blue);
+        }
+
+        .profile-info-value {
+            word-break: break-all;
+            color: #555;
+            text-align: right;
+            max-width: 60%;
+        }
+
+        .btn-download-qr {
+            margin-top: 15px;
+            width: 100%;
         }
     </style>
 </head>
@@ -71,6 +149,35 @@
             </div>
 
             <div class="col-lg-4">
+                <!-- TARJETA DE PERFIL CON QR -->
+                <div class="profile-card">
+                    <div class="profile-header">
+                        <i class="bi bi-person-circle"></i>
+                        <h6 class="mb-0">Mi Perfil</h6>
+                    </div>
+
+                    <!-- QR Code generado dinámicamente -->
+                    <div id="qrCode"></div>
+
+                    <!-- Información del estudiante -->
+                    <div class="profile-info">
+                        <div class="profile-info-item">
+                            <span class="profile-info-label">📧 Email:</span>
+                            <span class="profile-info-value" id="profileEmail">Cargando...</span>
+                        </div>
+                        <div class="profile-info-item">
+                            <span class="profile-info-label">🔑 UID:</span>
+                            <span class="profile-info-value" id="profileUID" style="font-size: 11px;">Cargando...</span>
+                        </div>
+                    </div>
+
+                    <!-- Botón para descargar QR -->
+                    <button id="btnDescargarQR" class="btn btn-primary btn-download-qr btn-sm">
+                        <i class="bi bi-download me-2"></i>Descargar QR
+                    </button>
+                </div>
+
+                <!-- SECCIÓN DE CALIFICACIONES -->
                 <h5 class="fw-bold mb-4 text-uppercase small text-muted">Tus Calificaciones</h5>
                 <div id="listaResultados" class="list-group shadow-sm">
                 </div>
@@ -82,6 +189,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        
         const firebaseConfig = {
             apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
             authDomain: "databaseex-238c7.firebaseapp.com",
@@ -95,19 +203,63 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
+        let currentUser = null;
+
         onAuthStateChanged(auth, (user) => {
             if (!user) {
                 window.location.href = "index.html";
             } else {
+                currentUser = user;
                 document.getElementById('userIdDisplay').innerText = user.email;
+                document.getElementById('profileEmail').innerText = user.email;
+                document.getElementById('profileUID').innerText = user.uid.substring(0, 25) + '...';
+
+                // Generar QR con datos del estudiante
+                generarQR(user);
+
                 cargarExamenes();
                 cargarResultados(user.uid);
             }
         });
 
-        // Cargar exámenes publicados (Módulo 2 y 3)
+        // Función para generar QR con datos del perfil
+        function generarQR(user) {
+            const qrData = {
+                email: user.email,
+                uid: user.uid,
+                fecha: new Date().toLocaleDateString('es-ES')
+            };
+
+            // Limpiar QR anterior
+            const qrElement = document.getElementById('qrCode');
+            qrElement.innerHTML = '';
+
+            // Generar nuevo QR
+            new QRCode(qrElement, {
+                text: JSON.stringify(qrData),
+                width: 200,
+                height: 200,
+                colorDark: "#34495e",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+
+        // Descargar QR
+        document.getElementById('btnDescargarQR').addEventListener('click', function () {
+            if (currentUser) {
+                const canvas = document.querySelector('#qrCode canvas');
+                if (canvas) {
+                    const link = document.createElement('a');
+                    link.href = canvas.toDataURL('image/png');
+                    link.download = `QR_Perfil_${currentUser.email.split('@')[0]}.png`;
+                    link.click();
+                }
+            }
+        });
+
+        // Cargar exámenes publicados
         async function cargarExamenes(user) {
-            // 1. Primero obtenemos los IDs de los exámenes que el alumno YA HIZO
             const qResultados = query(collection(db, "results"), where("ID_estudiante", "==", user.uid));
             const querySnapshotResultados = await getDocs(qResultados);
             const examenesCompletados = [];
@@ -115,7 +267,6 @@
                 examenesCompletados.push(doc.data().ID_examen);
             });
 
-            // 2. Ahora cargamos los exámenes disponibles (Módulo 3)
             onSnapshot(collection(db, "exams"), (snapshot) => {
                 const container = document.getElementById('listaExamenesDisponibles');
                 container.innerHTML = '';
@@ -126,7 +277,6 @@
                     const examID = doc.id;
                     const examen = doc.data();
 
-                    // REGLA: Si el ID del examen NO está en la lista de completados, se muestra
                     if (!examenesCompletados.includes(examID)) {
                         hayExamenes = true;
                         container.innerHTML += `
@@ -147,7 +297,7 @@
             });
         }
 
-        // Cargar mis notas (Módulo 4: Portal de Resultados)
+        // Cargar calificaciones
         function cargarResultados(uid) {
             const q = query(collection(db, "results"), where("ID_estudiante", "==", uid));
             onSnapshot(q, (snapshot) => {
