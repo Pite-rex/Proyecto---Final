@@ -1,67 +1,254 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Examen</title>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
-    <link rel="stylesheet" href="styles.css">
+    <title>Examen en Progreso - ExamSys</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f0f2f5;
+            user-select: none;
+        }
+
+        #timer-sticky {
+            position: sticky;
+            top: 10px;
+            z-index: 1000;
+        }
+
+        .pregunta-card {
+            border-radius: 12px;
+            border: none;
+            margin-bottom: 20px;
+        }
+    </style>
 </head>
+
 <body>
-    <div id="progress-container">
-        <div id="progress-bar"></div>
+
+    <div class="container py-4">
+        <div id="timer-sticky" class="d-flex justify-content-end mb-3">
+            <div class="badge bg-danger p-3 fs-5 shadow-sm">
+                <i class="bi bi-clock me-2"></i> Tiempo restante: <span id="time">00:00</span>
+            </div>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body">
+                        <h3 id="tituloExamen">Cargando evaluación...</h3>
+                        <p class="text-muted small">El progreso se guarda automáticamente cada minuto.</p>
+                    </div>
+                </div>
+
+                <form id="quizForm">
+                    <div id="contenedorPreguntas">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 btn-lg shadow">Finalizar y Enviar Examen</button>
+                </form>
+            </div>
+        </div>
     </div>
-    <form id="exam-form">
-        <div id="question-container"></div>
-        <button type="submit">Submit</button>
-    </form>
-    <div id="error-message" style="color: red;"></div>
 
-    <script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, doc, getDoc, updateDoc, collection, addDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
         const firebaseConfig = {
-            // Your Firebase configuration here
+            apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
+            authDomain: "databaseex-238c7.firebaseapp.com",
+            projectId: "databaseex-238c7",
+            storageBucket: "databaseex-238c7.firebasestorage.app",
+            messagingSenderId: "1013480049532",
+            appId: "1:1013480049532:web:066afa29f8727c7ea332f9"
         };
-        firebase.initializeApp(firebaseConfig);
 
-        let questionCounter = 0;
-        const questions = [...]; // Array of questions
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
 
-        function updateProgressBar() {
-            const progressBar = document.getElementById('progress-bar');
-            const progressPercentage = (questionCounter / questions.length) * 100;
-            progressBar.style.width = `${progressPercentage}%`;
-        }
+        // 1. Obtener ID del examen desde la URL (?id=XXXXXXXX)
+        const urlParams = new URLSearchParams(window.location.search);
+        const examID = urlParams.get('id');
+        let resultID = "";
 
-        function validateAnswers() {
-            const answers = [...]; // Collect answers
-            for (let answer of answers) {
-                if (!answer) {
-                    document.getElementById('error-message').innerText = 'Please answer all questions before submission.';
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        document.getElementById('exam-form').addEventListener('submit', (event) => {
-            event.preventDefault();
-            if (validateAnswers()) {
-                // Submit the exam
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                window.location.href = "index.html";
+            } else if (examID) {
+                await cargarExamen(user);
+            } else {
+                alert("No se especificó un examen válido.");
+                window.location.href = "dashboard_estudiante.html";
             }
         });
 
-        function fetchQuestions() {
-            const db = firebase.database();
-            db.ref('questions').once('value').then((snapshot) => {
-                // Handle questions
-                updateProgressBar();
-            }).catch((error) => {
-                document.getElementById('error-message').innerText = 'Error fetching questions: ' + error.message;
+        async function cargarExamen(user) {
+            try {
+                // Leer datos del examen (Módulo 2)
+                const examSnap = await getDoc(doc(db, "exams", examID));
+                if (!examSnap.exists()) return;
+
+                const examData = examSnap.data();
+                document.getElementById('tituloExamen').innerText = examData.titulo;
+
+                // Verificar si ya hizo o empezó el examen
+                const qVerificar = query(
+                    collection(db, "results"),
+                    where("ID_estudiante", "==", user.uid),
+                    where("ID_examen", "==", examID)
+                );
+
+                const checkSnap = await getDocs(qVerificar);
+                let existingResult = null;
+                checkSnap.forEach(doc => { existingResult = { id: doc.id, ...doc.data() }; });
+
+                if (existingResult) {
+                    if (existingResult.estado === "finalizado") {
+                        alert("Ya has realizado este examen anteriormente.");
+                        window.location.href = "dashboard_estudiante.html";
+                        return;
+                    } else {
+                        resultID = existingResult.id; // Recuperar progreso
+                    }
+                } else {
+                    // Crear el registro inicial en la colección 'results'
+                    const resRef = await addDoc(collection(db, "results"), {
+                        ID_estudiante: user.uid,
+                        ID_examen: examID,
+                        estado: "en_progreso",
+                        fechaInicio: new Date().toISOString(),
+                        respuestasTemporales: {}
+                    });
+                    resultID = resRef.id;
+                }
+
+                // Iniciar cronómetro
+                startTimer(examData.limiteMinutos * 60);
+
+                // Cargar cada pregunta del banco (Módulo 2)
+                const contenedor = document.getElementById('contenedorPreguntas');
+                contenedor.innerHTML = '';
+                window.examQuestions = []; // Para poder calificar al final
+
+                for (const pID of examData.preguntasIDs) {
+                    const qSnap = await getDoc(doc(db, "questions", pID));
+                    if (qSnap.exists()) {
+                        const qData = qSnap.data();
+                        qData.id = pID;
+                        window.examQuestions.push(qData);
+                        renderPregunta(pID, qData, contenedor, existingResult?.respuestasTemporales);
+                    }
+                }
+            } catch (e) {
+                console.error("Error cargando examen:", e);
+            }
+        }
+
+        function renderPregunta(id, data, contenedor, respuestasGuardadas) {
+            const div = document.createElement('div');
+            div.className = 'card pregunta-card shadow-sm p-4';
+            
+            const respAnterior = respuestasGuardadas ? respuestasGuardadas[id] : '';
+
+            let opcionesHTML = '';
+            if (data.tipo === 'opcion_multiple') {
+                data.opciones.forEach(opt => {
+                    const checked = (respAnterior === opt) ? 'checked' : '';
+                    opcionesHTML += `
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="${id}" value="${opt}" ${checked} required>
+                        <label class="form-check-label">${opt}</label>
+                    </div>`;
+                });
+            } else if (data.tipo === 'verdadero_falso') {
+                const isTrue = (respAnterior === 'Verdadero') ? 'checked' : '';
+                const isFalse = (respAnterior === 'Falso') ? 'checked' : '';
+                opcionesHTML = `
+                <div class="form-check"><input class="form-check-input" type="radio" name="${id}" value="Verdadero" ${isTrue} required><label class="form-check-label">Verdadero</label></div>
+                <div class="form-check"><input class="form-check-input" type="radio" name="${id}" value="Falso" ${isFalse} required><label class="form-check-label">Falso</label></div>`;
+            } else {
+                opcionesHTML = `<textarea name="${id}" class="form-control" rows="3" placeholder="Escribe tu respuesta..." required>${respAnterior || ''}</textarea>`;
+            }
+
+            div.innerHTML = `<h5 class="mb-3">${data.planteamiento}</h5>` + opcionesHTML;
+            contenedor.appendChild(div);
+        }
+
+        // Cronómetro (Módulo 3)
+        function startTimer(duration) {
+            let timer = duration;
+            const display = document.getElementById('time');
+            const interval = setInterval(() => {
+                let minutes = parseInt(timer / 60, 10);
+                let seconds = parseInt(timer % 60, 10);
+                display.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+                if (--timer < 0) {
+                    clearInterval(interval);
+                    alert("Tiempo agotado.");
+                    enviarExamen();
+                }
+            }, 1000);
+        }
+
+        async function enviarExamen() {
+            try {
+                const formData = new FormData(document.getElementById('quizForm'));
+                const respuestas = Object.fromEntries(formData.entries());
+
+                let correctas = 0;
+                let totalCalificables = 0;
+                let requiereRevisionManual = false;
+
+                // Auto-calificar comparando con el banco de preguntas guardado en memoria
+                window.examQuestions.forEach(q => {
+                    if (q.tipo === 'ensayo') {
+                        requiereRevisionManual = true;
+                    } else {
+                        totalCalificables++;
+                        if (respuestas[q.id] === q.respuestaCorrecta) correctas++;
+                    }
+                });
+
+                let calificacion = totalCalificables > 0 ? Math.round((correctas / totalCalificables) * 100) : 0;
+                let textoCalificacion = requiereRevisionManual ? "Pendiente" : `${calificacion}`;
+
+                await updateDoc(doc(db, "results", resultID), {
+                    respuestas: respuestas,
+                    estado: "finalizado",
+                    fechaTermino: new Date().toISOString(),
+                    calificacionFinal: textoCalificacion,
+                    requiereRevisionManual: requiereRevisionManual
+                });
+                alert("Examen enviado con éxito.");
+                window.location.href = "dashboard_estudiante.html";
+            } catch (error) {
+                console.error("Error al enviar examen:", error);
+                alert("Hubo un error al guardar el examen. Intenta de nuevo.");
+            }
+        }
+
+        document.getElementById('quizForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (confirm("¿Enviar examen?")) enviarExamen();
+        });
+
+        async function guardarProgreso() {
+            if (!resultID) return;
+            const formData = new FormData(document.getElementById('quizForm'));
+            await updateDoc(doc(db, "results", resultID), {
+                respuestasTemporales: Object.fromEntries(formData.entries()),
+                ultimoGuardado: new Date().toISOString()
             });
         }
 
-        window.onload = fetchQuestions;
+        setInterval(guardarProgreso, 60000);
     </script>
+
 </body>
+
 </html>
