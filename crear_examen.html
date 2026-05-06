@@ -99,6 +99,7 @@
         import { getFirestore, collection, addDoc, onSnapshot, query } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         // 2. CORRECCIÓN: Importamos getAuth y onAuthStateChanged correctamente
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         const firebaseConfig = {
             apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
             authDomain: "databaseex-238c7.firebaseapp.com",
@@ -107,21 +108,33 @@
             messagingSenderId: "1013480049532",
             appId: "1:1013480049532:web:066afa29f8727c7ea332f9"
         };
+        const urlParams = new URLSearchParams(window.location.search);
+        const examId = urlParams.get('edit');
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
-        let docenteUID = null;
-
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 console.log("Usuario autenticado, cargando banco...");
-                docenteUID = user.uid;
                 cargarBancoPreguntas();
             } else {
                 alert("Debes iniciar sesión primero.");
-                window.location.href = "index.html";
+                window.location.href = "login.html";
             }
         });
+        if (examId) {
+            const docRef = doc(db, "exams", examId);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                document.getElementById('tituloExamen').value = data.titulo;
+                document.getElementById('fechaDisponibilidad').value = data.fechaInicio;
+                document.getElementById('limiteTiempo').value = data.limiteMinutos;
+                document.getElementById('intentos').value = data.intentosMaximos;
+                preguntasSeleccionadas = data.preguntasIDs || [];
+                document.querySelector('button[type="submit"]').innerText = "Actualizar Examen";
+            }
+        }
 
         let preguntasSeleccionadas = [];
 
@@ -169,27 +182,43 @@
                 return;
             }
 
-            if (!docenteUID) {
-                alert("Error de sesión: No se pudo identificar tu usuario docente. Por favor, recarga la página e intenta de nuevo.");
-                return;
-            }
+            // Preparamos los datos del examen[cite: 2]
+            const datosExamen = {
+                titulo: document.getElementById('tituloExamen').value,
+                fechaInicio: document.getElementById('fechaDisponibilidad').value,
+                limiteMinutos: document.getElementById('limiteTiempo').value,
+                intentosMaximos: document.getElementById('intentos').value,
+                tipoRetro: document.getElementById('retroal').value,
+                preguntasIDs: preguntasSeleccionadas,
+                ultimaModificacion: new Date().toISOString()
+            };
 
             try {
-                await addDoc(collection(db, "exams"), {
-                    titulo: document.getElementById('tituloExamen').value,
-                    fechaInicio: document.getElementById('fechaDisponibilidad').value,
-                    limiteMinutos: parseInt(document.getElementById('limiteTiempo').value, 10),
-                    intentosMaximos: parseInt(document.getElementById('intentos').value, 10),
-                    tipoRetro: document.getElementById('retroal').value,
-                    preguntasIDs: preguntasSeleccionadas,
-                    creadoPor: docenteUID, 
-                    fechaCreacion: new Date().toISOString()
-                });
-                alert("Examen publicado correctamente");
+                if (examId) {
+                    // Si hay un ID, buscamos los datos en Firebase para llenar el formulario
+                    const docRef = doc(db, "exams", examId);
+                    const docSnap = await getDoc(docRef);
+
+                    if (docSnap.exists()) {
+                        const data = docSnap.exists() ? docSnap.data() : null;
+                        if (data) {
+                            document.getElementById('tituloExamen').value = data.titulo;
+                            document.getElementById('fechaDisponibilidad').value = data.fechaInicio;
+                            document.getElementById('limiteTiempo').value = data.limiteMinutos;
+                            document.getElementById('intentos').value = data.intentosMaximos;
+                            document.getElementById('retroal').value = data.tipoRetro;
+                            // Guardamos las IDs de las preguntas para que aparezcan seleccionadas
+                            preguntasSeleccionadas = data.preguntasIDs || [];
+                            document.querySelector('button[type="submit"]').innerText = "Actualizar Examen";
+                            document.querySelector('button[type="submit"]').className = "btn btn-warning w-100 py-3 shadow";
+                        }
+                    }
+                }
+
                 window.location.href = "dashboard_profesor.html";
             } catch (error) {
-                console.error("Error al publicar examen: ", error);
-                alert("Hubo un error al guardar el examen: " + error.message);
+                console.error("Error al procesar el examen: ", error);
+                alert("Hubo un error: " + error.message);
             }
         });
     </script>
