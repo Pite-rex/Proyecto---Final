@@ -105,6 +105,9 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { doc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        let editId = null;
 
         // Reutiliza tu configuración de Firebase
         const firebaseConfig = {
@@ -115,12 +118,12 @@
             messagingSenderId: "1013480049532",
             appId: "1:1013480049532:web:066afa29f8727c7ea332f9"
         };
-        
+
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
-        
+
 
         // Función para mostrar/ocultar opciones según el tipo
         window.toggleOpciones = () => {
@@ -150,6 +153,30 @@
                 respuestaCorrecta.required = true;
             }
         };
+        window.prepararEdicion = (id, dataJson) => {
+            const data = JSON.parse(decodeURIComponent(dataJson));
+            editId = id;
+            document.getElementById('textoPregunta').value = data.planteamiento;
+            document.getElementById('categoria').value = data.categoria;
+            document.getElementById('dificultad').value = data.dificultad;
+            document.getElementById('tipoPregunta').value = data.tipo;
+            document.getElementById('respuestaCorrecta').value = data.respuestaCorrecta;
+
+            toggleOpciones();
+
+            if (data.tipo === 'opcion_multiple') {
+                const opts = document.querySelectorAll('.opt');
+                data.opciones.forEach((val, i) => { if (opts[i]) opts[i].value = val; });
+            }
+
+            document.querySelector('#questionForm button').innerText = "Actualizar Pregunta";
+            document.querySelector('#questionForm button').className = "btn btn-warning w-100";
+        };
+        window.eliminarPregunta = async (id) => {
+            if (confirm("¿Eliminar esta pregunta del banco?")) {
+                await deleteDoc(doc(db, "questions", id));
+            }
+        };
         // Guardado corregido (Colección questions) [cite: 31]
         document.getElementById('questionForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -157,30 +184,51 @@
             const tipo = document.getElementById('tipoPregunta').value;
             let opciones = [];
 
-            // Solo extraemos opciones si no es Verdadero/Falso o Ensayo
+            // Extraer opciones si es opción múltiple
             if (tipo === 'opcion_multiple') {
                 const optsElements = document.querySelectorAll('.opt');
                 opciones = Array.from(optsElements).map(input => input.value).filter(v => v !== "");
             }
 
-            try {
-                await addDoc(collection(db, "questions"), {
-                    planteamiento: document.getElementById('textoPregunta').value,
-                    categoria: document.getElementById('categoria').value,
-                    dificultad: document.getElementById('dificultad').value,
-                    tipo: tipo,
-                    opciones: opciones,
-                    respuestaCorrecta: document.getElementById('respuestaCorrecta').value,
-                    aciertosHistoricos: 0,
-                    fechaCreacion: new Date().toISOString()
-                });
+            // Estructura del objeto de la pregunta[cite: 2]
+            const objetoPregunta = {
+                planteamiento: document.getElementById('textoPregunta').value,
+                categoria: document.getElementById('categoria').value,
+                dificultad: document.getElementById('dificultad').value,
+                tipo: tipo,
+                opciones: opciones,
+                respuestaCorrecta: document.getElementById('respuestaCorrecta').value,
+                fechaUltimaModificacion: new Date().toISOString()
+            };
 
-                alert("¡Pregunta guardada exitosamente!");
+            try {
+                if (editId) {
+                    // LÓGICA DE EDICIÓN: Si editId tiene un valor, actualizamos el documento existente
+                    const preguntaRef = doc(db, "questions", editId);
+                    await updateDoc(preguntaRef, objetoPregunta);
+
+                    alert("¡Pregunta actualizada exitosamente!");
+
+                    // Restaurar el formulario al estado original
+                    editId = null;
+                    document.querySelector('#questionForm button').innerText = "Guardar en el Banco";
+                    document.querySelector('#questionForm button').className = "btn btn-primary w-100";
+                } else {
+                    // LÓGICA DE NUEVA PREGUNTA: Si editId es nulo, creamos un documento nuevo[cite: 2]
+                    objetoPregunta.fechaCreacion = new Date().toISOString();
+                    objetoPregunta.aciertosHistoricos = 0;
+                    await addDoc(collection(db, "questions"), objetoPregunta);
+
+                    alert("¡Pregunta guardada exitosamente!");
+                }
+
+                // Limpiar el formulario y resetear visualmente[cite: 2]
                 document.getElementById('questionForm').reset();
-                toggleOpciones(); // Resetear estado visual
+                toggleOpciones();
+
             } catch (error) {
-                console.error("Error al guardar: ", error);
-                alert("Error al guardar: " + error.message);
+                console.error("Error al procesar la pregunta: ", error);
+                alert("Error: " + error.message);
             }
         });
 
@@ -189,16 +237,32 @@
         onSnapshot(q, (snapshot) => {
             const lista = document.getElementById('listaPreguntas');
             lista.innerHTML = '';
+
             snapshot.forEach((doc) => {
                 const data = doc.data();
+                // Convertimos los datos a un string seguro para pasarlo por la función de edición
+                const dataJson = encodeURIComponent(JSON.stringify(data));
+
                 lista.innerHTML += `
-                <div class="list-group-item">
-                    <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">${data.planteamiento}</h6>
-                        <span class="badge bg-info text-dark">${data.dificultad}</span>
-                    </div>
-                    <small class="text-muted">Tema: ${data.categoria} | Tipo: ${data.tipo}</small>
-                </div>`;
+        <div class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">${data.planteamiento}</h6>
+                </div>
+                <small class="text-muted">Tema: ${data.categoria} | Tipo: ${data.tipo} | </small>
+                <span class="badge bg-info text-dark">${data.dificultad}</span>
+            </div>
+            
+            <!-- SECCIÓN DE BOTONES NUEVA -->
+            <div class="btn-group shadow-sm">
+                <button class="btn btn-sm btn-outline-warning" onclick="prepararEdicion('${doc.id}', '${dataJson}')" title="Editar">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="eliminarPregunta('${doc.id}')" title="Eliminar">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>`;
             });
         });
     </script>
