@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,14 +8,37 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <style>
-        :root { --primary-dark: #2c3e50; --accent: #3498db; }
-        body { background-color: #f8f9fa; }
-        .navbar { background-color: var(--primary-dark); }
-        .card-menu { border: none; transition: 0.3s; cursor: pointer; }
-        .card-menu:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
-        .status-online { color: #2ecc71; font-size: 0.8rem; }
+        :root {
+            --primary-dark: #2c3e50;
+            --accent: #3498db;
+        }
+
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .navbar {
+            background-color: var(--primary-dark);
+        }
+
+        .card-menu {
+            border: none;
+            transition: 0.3s;
+            cursor: pointer;
+        }
+
+        .card-menu:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-online {
+            color: #2ecc71;
+            font-size: 0.8rem;
+        }
     </style>
 </head>
+
 <body>
 
     <nav class="navbar navbar-dark shadow-sm p-3">
@@ -84,7 +108,7 @@
                             </tr>
                         </thead>
                         <tbody id="listaExamenes">
-                            </tbody>
+                        </tbody>
                     </table>
                 </div>
             </div>
@@ -153,16 +177,17 @@
                 const fecha = examen.fechaInicio ? new Date(examen.fechaInicio).toLocaleDateString() : "Sin fecha";
 
                 tbody.innerHTML += `
-                    <tr>
-                        <td>${titulo}</td>
-                        <td>${fecha}</td>
-                        <td><span class="badge bg-success">Activo</span></td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-primary" onclick="monitorearExamen('${examen.id}')" title="Monitorear"><i class="bi bi-eye"></i></button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="eliminarExamen('${examen.id}')" title="Eliminar"><i class="bi bi-trash"></i></button>
-                        </td>
-                    </tr>
-                `;
+    <tr>
+        <td>${titulo}</td>
+        <td>${fecha}</td>
+        <td><span class="badge bg-success">Activo</span></td>
+        <td>
+            <button class="btn btn-sm btn-outline-primary" onclick="monitorearExamen('${examen.id}')" title="Monitorear"><i class="bi bi-eye"></i></button>
+            <button class="btn btn-sm btn-outline-warning" onclick="window.location.href='crear_examen.html?edit=${examen.id}'" title="Editar"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-sm btn-outline-danger" onclick="eliminarExamen('${examen.id}')" title="Eliminar"><i class="bi bi-trash"></i></button>
+        </td>
+    </tr>
+`;
             });
         }, (error) => {
             console.error("Error al obtener los exámenes: ", error);
@@ -187,26 +212,26 @@
             modal.show();
             const listaActivos = document.getElementById('listaActivos');
             listaActivos.innerHTML = '<li class="list-group-item text-center">Buscando estudiantes activos...</li>';
-            
+
             const qActivos = query(collection(db, "results"), where("ID_examen", "==", id), where("estado", "==", "en_progreso"));
-            
+
             onSnapshot(qActivos, async (snapshot) => {
                 if (snapshot.empty) {
                     listaActivos.innerHTML = '<li class="list-group-item text-center text-muted">No hay estudiantes realizando este examen ahora mismo.</li>';
                     return;
                 }
-                
+
                 listaActivos.innerHTML = '';
                 for (const docRes of snapshot.docs()) {
                     const data = docRes.data();
                     let nombreAlumno = "Alumno (UID: " + data.ID_estudiante.substring(0, 5) + "...)";
-                    
+
                     // Obtener nombre del alumno en base a su ID
                     try {
                         const userDoc = await getDoc(doc(db, "users", data.ID_estudiante));
                         if (userDoc.exists()) nombreAlumno = userDoc.data().nombre;
                     } catch (e) { console.warn("No se pudo obtener el nombre del alumno", e); }
-                    
+
                     listaActivos.innerHTML += `
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <span><i class="bi bi-person-circle text-primary me-2"></i> ${nombreAlumno}</span>
@@ -226,4 +251,5 @@
         });
     </script>
 </body>
+
 </html>
