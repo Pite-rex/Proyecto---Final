@@ -7,7 +7,6 @@
     <title>Panel Estudiante - ExamSys</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-
     <style>
         :root {
             --student-blue: #34495e;
@@ -38,37 +37,6 @@
             padding: 30px;
             margin-bottom: 30px;
         }
-
-        .profile-card {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-        }
-
-        .profile-header i {
-            font-size: 40px;
-            color: var(--student-blue);
-        }
-
-        .profile-info {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 10px;
-            font-size: 13px;
-        }
-
-        .profile-info-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #dee2e6;
-        }
-
-        .profile-info-item:last-child {
-            border-bottom: none;
-        }
     </style>
 </head>
 
@@ -86,10 +54,11 @@
             <div class="row align-items-center">
                 <div class="col-md-8">
                     <h2 class="fw-bold mb-1">¡Hola, Estudiante!</h2>
-                    <p class="text-muted">Gestiona tus evaluaciones y revisa tus resultados aquí.</p>
+                    <p class="text-muted">Aquí puedes ver tus exámenes programados y tus notas finales.</p>
                 </div>
                 <div class="col-md-4 text-md-end">
-                    <span class="badge bg-light text-dark p-2 border">Sesión activa</span>
+                    <span class="badge bg-light text-dark p-2 border">ID: <span
+                            id="userIdDisplay">Cargando...</span></span>
                 </div>
             </div>
         </div>
@@ -98,32 +67,13 @@
             <div class="col-lg-8">
                 <h5 class="fw-bold mb-4 text-uppercase small text-muted">Evaluaciones Pendientes</h5>
                 <div id="listaExamenesDisponibles" class="row g-3">
-                    <div class="text-center p-5">Cargando exámenes...</div>
                 </div>
             </div>
 
             <div class="col-lg-4">
-                <div class="profile-card">
-                    <div class="d-flex align-items-center mb-3">
-                        <i class="bi bi-person-circle me-3"></i>
-                        <h6 class="mb-0 fw-bold">Mi Información</h6>
-                    </div>
-
-                    <div class="profile-info">
-                        <div class="profile-info-item">
-                            <span class="fw-bold text-muted">Email:</span>
-                            <span id="profileEmail">...</span>
-                        </div>
-                        <div class="profile-info-item">
-                            <span class="fw-bold text-muted">ID Usuario:</span>
-                            <span id="profileUID" style="font-size: 11px;">...</span>
-                        </div>
-                    </div>
-                </div>
-
                 <h5 class="fw-bold mb-4 text-uppercase small text-muted">Tus Calificaciones</h5>
                 <div id="listaResultados" class="list-group shadow-sm">
-                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -150,87 +100,86 @@
             if (!user) {
                 window.location.href = "index.html";
             } else {
-                document.getElementById('profileEmail').innerText = user.email;
-                document.getElementById('profileUID').innerText = user.uid;
-
-                cargarExamenes(user);
-                cargarResultados(user.uid);
+                document.getElementById('userIdDisplay').innerText = user.email;
+                // Pasamos el usuario a las funciones de carga
+                cargarDashboardCompleto(user);
             }
         });
 
-        async function cargarExamenes(user) {
-            try {
-                // 1. Obtener estados de los exámenes del usuario
-                const qResultados = query(collection(db, "results"), where("ID_estudiante", "==", user.uid));
-                const querySnapshotResultados = await getDocs(qResultados);
-                
-                const completados = [];
-                const enProgreso = [];
+        async function cargarDashboardCompleto(user) {
+            // Escuchamos los resultados del alumno en tiempo real
+            const qResultados = query(collection(db, "results"), where("ID_estudiante", "==", user.uid));
 
-                querySnapshotResultados.forEach((doc) => {
-                    const data = doc.data();
-                    if (data.estado === "finalizado") completados.push(data.ID_examen);
-                    else if (data.estado === "en_progreso") enProgreso.push(data.ID_examen);
+            onSnapshot(qResultados, (snapshotResultados) => {
+                const examenesCompletados = [];
+                const listResultados = document.getElementById('listaResultados');
+                listResultados.innerHTML = '';
+
+                // 1. Procesar resultados actuales
+                if (snapshotResultados.empty) {
+                    listResultados.innerHTML = '<div class="list-group-item small text-muted">Aún no tienes exámenes finalizados.</div>';
+                }
+
+                snapshotResultados.forEach((docRes) => {
+                    const res = docRes.data();
+                    // Guardamos el ID del examen para filtrarlo de la lista de pendientes
+                    examenesCompletados.push(res.ID_examen);
+
+                    listResultados.innerHTML += `
+                    <a href="revision_resultados.html?id=${docRes.id}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="d-block fw-bold">${res.materia || 'Examen'}</span>
+                            <small class="text-muted">Finalizado el: ${new Date(res.fechaTermino).toLocaleDateString()}</small>
+                        </div>
+                        <span class="badge ${res.calificacionFinal !== null ? 'bg-success' : 'bg-warning'} rounded-pill">
+                            ${res.calificacionFinal !== null ? res.calificacionFinal : 'Pendiente'}
+                        </span>
+                    </a>
+                `;
                 });
 
-                // 2. Escuchar cambios en la colección de exámenes
-                onSnapshot(collection(db, "exams"), (snapshot) => {
-                    const container = document.getElementById('listaExamenesDisponibles');
-                    container.innerHTML = '';
-                    let hayExamenes = false;
-
-                    snapshot.forEach((doc) => {
-                        const examID = doc.id;
-                        const examen = doc.data();
-
-                        // Mostrar solo si no está finalizado
-                        if (!completados.includes(examID)) {
-                            hayExamenes = true;
-                            const esProceso = enProgreso.includes(examID);
-                            
-                            container.innerHTML += `
-                                <div class="col-md-6">
-                                    <div class="card exam-card shadow-sm p-4 bg-white h-100 border-start border-4 ${esProceso ? 'border-warning' : 'border-primary'}">
-                                        <h6 class="fw-bold text-primary">${examen.titulo || 'Examen'}</h6>
-                                        <p class="small text-muted mb-3"><i class="bi bi-clock me-1"></i> Duración: ${examen.limiteMinutos || 0} min</p>
-                                        <a href="ejecucion_examen.html?id=${examID}" class="btn ${esProceso ? 'btn-warning' : 'btn-primary'} w-100 mt-auto">
-                                            ${esProceso ? 'Continuar Examen' : 'Comenzar'}
-                                        </a>
-                                    </div>
-                                </div>`;
-                        }
-                    });
-
-                    if (!hayExamenes) {
-                        container.innerHTML = '<div class="alert alert-info w-100 text-center">No tienes exámenes pendientes por ahora.</div>';
-                    }
-                });
-            } catch (error) {
-                console.error("Error en Firestore:", error);
-            }
+                // 2. Cargar/Actualizar exámenes pendientes basados en lo que NO ha completado
+                cargarExamenesPendientes(examenesCompletados);
+            });
         }
 
-        function cargarResultados(uid) {
-            const q = query(collection(db, "results"), where("ID_estudiante", "==", uid));
-            onSnapshot(q, (snapshot) => {
-                const list = document.getElementById('listaResultados');
-                list.innerHTML = '';
-                let hayFinalizados = false;
+        function cargarExamenesPendientes(completados) {
+            onSnapshot(collection(db, "exams"), (snapshotExams) => {
+                const container = document.getElementById('listaExamenesDisponibles');
+                container.innerHTML = '';
+                let hayExamenes = false;
 
-                snapshot.forEach((doc) => {
-                    const res = doc.data();
-                    if (res.estado === "finalizado") {
-                        hayFinalizados = true;
-                        list.innerHTML += `
-                            <a href="revision_resultados.html?id=${doc.id}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                                <span>${res.nombreExamen || 'Examen Finalizado'}</span>
-                                <span class="badge bg-success rounded-pill">${res.calificacionFinal || 0}</span>
-                            </a>`;
+                snapshotExams.forEach((docExam) => {
+                    const examID = docExam.id;
+                    const examen = docExam.data();
+
+                    // FILTRO: Solo mostrar si no está en la lista de completados
+                    if (!completados.includes(examID)) {
+                        hayExamenes = true;
+                        container.innerHTML += `
+                        <div class="col-md-6">
+                            <div class="card exam-card shadow-sm p-4 bg-white h-100">
+                                <div class="badge bg-info mb-2 align-self-start">${examen.materia || 'General'}</div>
+                                <h5 class="fw-bold text-dark">${examen.titulo}</h5>
+                                <p class="small text-muted mb-3">
+                                    <i class="bi bi-clock me-1"></i> Tiempo: ${examen.limiteMinutos} min <br>
+                                    <i class="bi bi-arrow-repeat me-1"></i> Intentos: ${examen.intentosMaximos || 1}
+                                </p>
+                                <a href="ejecucion_examen.html?id=${examID}" class="btn btn-primary w-100 mt-auto shadow-sm">
+                                    Comenzar Evaluación
+                                </a>
+                            </div>
+                        </div>
+                    `;
                     }
                 });
 
-                if (!hayFinalizados) {
-                    list.innerHTML = '<div class="list-group-item small text-muted text-center">Sin resultados aún.</div>';
+                if (!hayExamenes) {
+                    container.innerHTML = `
+                    <div class="text-center py-5 w-100">
+                        <i class="bi bi-check-circle text-success display-4"></i>
+                        <p class="text-muted mt-2">No tienes evaluaciones pendientes por el momento.</p>
+                    </div>`;
                 }
             });
         }
