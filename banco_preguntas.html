@@ -43,9 +43,15 @@
 
                             <div class="row mb-3">
                                 <div class="col-md-6">
-                                    <label class="form-label">Categoría (Tema)</label>
-                                    <input type="text" id="categoria" class="form-control" placeholder="Ej. HTML5"
-                                        required>
+                                    <label class="form-label fw-bold">Materia</label>
+                                    <select id="categoria" class="form-select" required
+                                        onchange="filtrarPreguntasPorMateria()">
+                                        <option value="">Seleccionar...</option>
+                                        <option value="Matematicas">Matemáticas</option>
+                                        <option value="Español">Español</option>
+                                        <option value="Historia">Historia</option>
+                                        <option value="Ciencias">Ciencias</option>
+                                    </select>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Dificultad</label>
@@ -71,14 +77,28 @@
                                     Correcta</label>
 
                                 <div id="inputsOpciones">
-                                    <input type="text" class="form-control mb-2 opt" placeholder="Opción A" required>
-                                    <input type="text" class="form-control mb-2 opt" placeholder="Opción B" required>
+                                    <input type="text" class="form-control mb-2 opt" placeholder="Opción A">
+                                    <input type="text" class="form-control mb-2 opt" placeholder="Opción B">
                                     <input type="text" class="form-control mb-2 opt" placeholder="Opción C">
                                 </div>
 
-                                <label class="form-label small fw-bold mt-2">Respuesta Correcta</label>
+                                <div id="inputVerdaderoFalso" style="display: none;" class="py-2">
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="vfRespuesta" id="radioV"
+                                            value="Verdadero">
+                                        <label class="form-check-label" for="radioV">Verdadero</label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="vfRespuesta" id="radioF"
+                                            value="Falso">
+                                        <label class="form-check-label" for="radioF">Falso</label>
+                                    </div>
+                                </div>
+
+                                <label id="labelRespuesta" class="form-label small fw-bold mt-2">Respuesta
+                                    Correcta</label>
                                 <input type="text" id="respuestaCorrecta" class="form-control border-success"
-                                    placeholder="Escribe la respuesta exacta" required>
+                                    placeholder="Escribe la respuesta exacta">
                             </div>
 
                             <button type="submit" class="btn btn-primary w-100">Guardar en el Banco</button>
@@ -103,7 +123,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, where, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { doc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
@@ -130,27 +150,28 @@
             const tipo = document.getElementById('tipoPregunta').value;
             const section = document.getElementById('sectionOpciones');
             const inputsOpciones = document.getElementById('inputsOpciones');
+            const inputVF = document.getElementById('inputVerdaderoFalso');
             const respuestaCorrecta = document.getElementById('respuestaCorrecta');
+            const labelRespuesta = document.getElementById('labelRespuesta');
+
+            // Reset general
+            section.style.display = 'block';
+            inputsOpciones.style.display = 'none';
+            inputVF.style.display = 'none';
+            respuestaCorrecta.style.display = 'block';
+            labelRespuesta.style.display = 'block';
 
             if (tipo === 'ensayo') {
                 section.style.display = 'none';
-                respuestaCorrecta.required = false;
-                document.querySelectorAll('.opt').forEach(i => i.required = false);
             } else if (tipo === 'verdadero_falso') {
-                section.style.display = 'block';
-                inputsOpciones.style.display = 'none'; // Oculta A, B, C
-                // Quitamos el 'required' de los inputs ocultos para que deje guardar
-                document.querySelectorAll('.opt').forEach(i => i.required = false);
-                respuestaCorrecta.placeholder = "Escribe 'Verdadero' o 'Falso'";
-                respuestaCorrecta.required = true;
+                inputVF.style.display = 'block';
+                respuestaCorrecta.style.display = 'none'; // Ocultamos el texto, usaremos el radio
+                labelRespuesta.style.display = 'none';
             } else {
-                section.style.display = 'block';
-                inputsOpciones.style.display = 'block'; // Muestra A, B, C
+                inputsOpciones.style.display = 'block';
                 document.querySelectorAll('.opt').forEach((i, index) => {
-                    if (index < 2) i.required = true; // Solo A y B obligatorias
+                    if (index < 2) i.required = true;
                 });
-                respuestaCorrecta.placeholder = "Texto de la respuesta correcta";
-                respuestaCorrecta.required = true;
             }
         };
         window.prepararEdicion = (id, dataJson) => {
@@ -183,21 +204,31 @@
 
             const tipo = document.getElementById('tipoPregunta').value;
             let opciones = [];
+            let respuestaFinal = "";
 
-            // Extraer opciones si es opción múltiple
             if (tipo === 'opcion_multiple') {
                 const optsElements = document.querySelectorAll('.opt');
                 opciones = Array.from(optsElements).map(input => input.value).filter(v => v !== "");
+                respuestaFinal = document.getElementById('respuestaCorrecta').value;
+            } else if (tipo === 'verdadero_falso') {
+                const radioSeleccionado = document.querySelector('input[name="vfRespuesta"]:checked');
+                if (!radioSeleccionado) {
+                    alert("Por favor selecciona si la respuesta es Verdadera o Falsa");
+                    return;
+                }
+                respuestaFinal = radioSeleccionado.value;
+                opciones = ["Verdadero", "Falso"];
+            } else {
+                respuestaFinal = "Pendiente de calificación (Ensayo)";
             }
 
-            // Estructura del objeto de la pregunta[cite: 2]
             const objetoPregunta = {
                 planteamiento: document.getElementById('textoPregunta').value,
                 categoria: document.getElementById('categoria').value,
                 dificultad: document.getElementById('dificultad').value,
                 tipo: tipo,
                 opciones: opciones,
-                respuestaCorrecta: document.getElementById('respuestaCorrecta').value,
+                respuestaCorrecta: respuestaFinal, // Guardamos el valor del radio si es V/F
                 fechaUltimaModificacion: new Date().toISOString()
             };
 
@@ -222,9 +253,9 @@
                     alert("¡Pregunta guardada exitosamente!");
                 }
 
-                // Limpiar el formulario y resetear visualmente[cite: 2]
                 document.getElementById('questionForm').reset();
                 toggleOpciones();
+                window.filtrarPreguntasPorMateria(); // Refresca la lista filtrada
 
             } catch (error) {
                 console.error("Error al procesar la pregunta: ", error);
@@ -232,40 +263,64 @@
             }
         });
 
-        // Leer preguntas en tiempo real
-        const q = query(collection(db, "questions"), orderBy("fechaCreacion", "desc"));
-        onSnapshot(q, (snapshot) => {
+
+        let unsubscribeLista = null;
+
+        window.filtrarPreguntasPorMateria = () => {
+            const materiaSeleccionada = document.getElementById('categoria').value;
             const lista = document.getElementById('listaPreguntas');
-            lista.innerHTML = '';
 
-            snapshot.forEach((doc) => {
-                const data = doc.data();
-                // Convertimos los datos a un string seguro para pasarlo por la función de edición
-                const dataJson = encodeURIComponent(JSON.stringify(data));
+            // Si hay un listener activo, lo cancelamos antes de crear uno nuevo
+            if (unsubscribeLista) unsubscribeLista();
 
-                lista.innerHTML += `
-        <div class="list-group-item d-flex justify-content-between align-items-center">
-            <div>
-                <div class="d-flex w-100 justify-content-between">
-                    <h6 class="mb-1">${data.planteamiento}</h6>
-                </div>
-                <small class="text-muted">Tema: ${data.categoria} | Tipo: ${data.tipo} | </small>
-                <span class="badge bg-info text-dark">${data.dificultad}</span>
-            </div>
-            
-            <!-- SECCIÓN DE BOTONES NUEVA -->
-            <div class="btn-group shadow-sm">
-                <button class="btn btn-sm btn-outline-warning" onclick="prepararEdicion('${doc.id}', '${dataJson}')" title="Editar">
-                    <i class="bi bi-pencil"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="eliminarPregunta('${doc.id}')" title="Eliminar">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </div>
-        </div>`;
+            if (!materiaSeleccionada) {
+                lista.innerHTML = '<p class="text-center text-muted">Selecciona una materia para ver sus preguntas existentes.</p>';
+                return;
+            }
+
+            lista.innerHTML = '<p class="text-center text-muted">Buscando reactivos de ' + materiaSeleccionada + '...</p>';
+
+            // Consulta filtrada por la materia (Categoría)
+            const q = query(
+                collection(db, "questions"),
+                where("categoria", "==", materiaSeleccionada)
+            );
+
+            // Activamos el listener en tiempo real para esa materia específica
+            unsubscribeLista = onSnapshot(q, (snapshot) => {
+                lista.innerHTML = '';
+
+                if (snapshot.empty) {
+                    lista.innerHTML = '<p class="text-center text-warning">No hay preguntas registradas para esta materia.</p>';
+                    return;
+                }
+
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const dataJson = encodeURIComponent(JSON.stringify(data));
+
+                    lista.innerHTML += `
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">${data.planteamiento}</h6>
+                        <small class="text-muted">Tipo: ${data.tipo} | </small>
+                        <span class="badge bg-info text-dark">${data.dificultad}</span>
+                    </div>
+                    <div class="btn-group shadow-sm">
+                        <button class="btn btn-sm btn-outline-warning" onclick="prepararEdicion('${doc.id}', '${dataJson}')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="eliminarPregunta('${doc.id}')">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>`;
+                });
             });
-        });
+        };
+        window.filtrarPreguntasPorMateria();
     </script>
+    
 
 </body>
 
