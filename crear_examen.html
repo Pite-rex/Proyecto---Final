@@ -15,6 +15,7 @@
         .question-item {
             cursor: pointer;
             transition: 0.2s;
+            border-left: 5px solid transparent;
         }
 
         .question-item:hover {
@@ -23,7 +24,7 @@
 
         .selected-q {
             border-left: 5px solid #2ecc71 !important;
-            background-color: #f0fff4;
+            background-color: #f0fff4 !important;
         }
     </style>
 </head>
@@ -32,7 +33,7 @@
 
     <div class="container py-5">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2><i class="bi bi-file-earmark-medical me-2"></i>Configurar Nuevo Examen</h2>
+            <h2 id="pageTitle"><i class="bi bi-file-earmark-medical me-2"></i>Configurar Nuevo Examen</h2>
             <a href="dashboard_profesor.html" class="btn btn-outline-secondary btn-sm">Cancelar</a>
         </div>
 
@@ -42,10 +43,22 @@
                     <div class="card shadow-sm rule-card mb-4">
                         <div class="card-body">
                             <h5 class="card-title mb-3">Reglas de Aplicación</h5>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Materia del Examen</label>
+                                <select id="materiaExamen" class="form-select" required
+                                    onchange="filtrarPreguntasPorMateria()">
+                                    <option value="">Selecciona una materia...</option>
+                                    <option value="Matematicas">Matemáticas</option>
+                                    <option value="Español">Español</option>
+                                    <option value="Historia">Historia</option>
+                                    <option value="Ciencias">Ciencias</option>
+                                </select>
+                            </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Título del Examen</label>
-                                <input type="text" id="tituloExamen" class="form-control" required>
+                                <label class="form-label fw-bold">Título del Examen</label>
+                                <input type="text" id="tituloExamen" class="form-control"
+                                    placeholder="Ej. Primer Parcial" required>
                             </div>
 
                             <div class="mb-3">
@@ -65,7 +78,7 @@
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Retroalimentación</label>
+                                <label class="form-label">Finalizar Examen</label>
                                 <select id="retroal" class="form-select">
                                     <option value="inmediata">Inmediata al terminar</option>
                                     <option value="post_cierre">Después de fecha de cierre</option>
@@ -73,7 +86,8 @@
                             </div>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-success w-100 py-3 shadow">Publicar Examen</button>
+                    <button type="submit" id="btnSubmit" class="btn btn-success w-100 py-3 shadow">Publicar
+                        Examen</button>
                 </div>
 
                 <div class="col-lg-8">
@@ -84,7 +98,7 @@
                         </div>
                         <div class="card-body">
                             <div id="bancoParaSeleccion" class="list-group">
-                                <p class="text-center">Cargando reactivos...</p>
+                                <p class="text-center text-muted">Cargando reactivos...</p>
                             </div>
                         </div>
                     </div>
@@ -95,11 +109,10 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        // 1. CORRECCIÓN: Quitamos getAuth de aquí, solo dejamos lo de Firestore
-        import { getFirestore, collection, addDoc, onSnapshot, query } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        // 2. CORRECCIÓN: Importamos getAuth y onAuthStateChanged correctamente
+        // CORRECCIÓN: Se agregó 'where' en la importación
+        import { getFirestore, collection, addDoc, onSnapshot, query, where, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
         const firebaseConfig = {
             apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
             authDomain: "databaseex-238c7.firebaseapp.com",
@@ -108,82 +121,127 @@
             messagingSenderId: "1013480049532",
             appId: "1:1013480049532:web:066afa29f8727c7ea332f9"
         };
-        const urlParams = new URLSearchParams(window.location.search);
-        const examId = urlParams.get('edit');
+
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
+
+        let preguntasSeleccionadas = [];
+        const urlParams = new URLSearchParams(window.location.search);
+        const examId = urlParams.get('edit');
+
+        // 1. Verificar Autenticación
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                console.log("Usuario autenticado, cargando banco...");
-                cargarBancoPreguntas();
+                if (examId) cargarDatosExamen();
+                // Inicializar el banco vacío o con mensaje
+                window.filtrarPreguntasPorMateria();
             } else {
-                alert("Debes iniciar sesión primero.");
                 window.location.href = "login.html";
             }
         });
-        if (examId) {
-            const docRef = doc(db, "exams", examId);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                document.getElementById('tituloExamen').value = data.titulo;
-                document.getElementById('fechaDisponibilidad').value = data.fechaInicio;
-                document.getElementById('limiteTiempo').value = data.limiteMinutos;
-                document.getElementById('intentos').value = data.intentosMaximos;
-                preguntasSeleccionadas = data.preguntasIDs || [];
-                document.querySelector('button[type="submit"]').innerText = "Actualizar Examen";
+
+        // 2. Cargar datos si es EDICIÓN
+        async function cargarDatosExamen() {
+            try {
+                const docRef = doc(db, "exams", examId);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    document.getElementById('materiaExamen').value = data.materia || "";
+                    document.getElementById('tituloExamen').value = data.titulo || "";
+                    document.getElementById('fechaDisponibilidad').value = data.fechaInicio || "";
+                    document.getElementById('limiteTiempo').value = data.limiteMinutos || 60;
+                    document.getElementById('intentos').value = data.intentosMaximos || 1;
+                    document.getElementById('retroal').value = data.tipoRetro || "inmediata";
+
+                    preguntasSeleccionadas = data.preguntasIDs || [];
+
+                    // Actualizar UI de edición
+                    document.getElementById('pageTitle').innerHTML = '<i class="bi bi-pencil-square me-2"></i>Editar Examen';
+                    const btn = document.getElementById('btnSubmit');
+                    btn.innerText = "Actualizar Examen";
+                    btn.className = "btn btn-warning w-100 py-3 shadow";
+
+                    // Cargar las preguntas de la materia del examen editado
+                    window.filtrarPreguntasPorMateria();
+                    actualizarContador();
+                }
+            } catch (error) {
+                console.error("Error al cargar examen:", error);
             }
         }
 
-        let preguntasSeleccionadas = [];
+        // 3. Función de Filtrado (Corregida)
+        window.filtrarPreguntasPorMateria = () => {
+            const materia = document.getElementById('materiaExamen').value;
+            // CORRECCIÓN: Usar el ID correcto del HTML 'bancoParaSeleccion'
+            const contenedor = document.getElementById('bancoParaSeleccion');
 
-        function cargarBancoPreguntas() {
-            onSnapshot(collection(db, "questions"), (snapshot) => {
-                const contenedor = document.getElementById('bancoParaSeleccion');
+            if (!materia) {
+                contenedor.innerHTML = '<p class="text-center text-muted">Selecciona una materia para ver las preguntas.</p>';
+                return;
+            }
+
+            contenedor.innerHTML = '<p class="text-center text-muted">Filtrando preguntas...</p>';
+
+            const q = query(
+                collection(db, "questions"),
+                where("categoria", "==", materia)
+            );
+
+            onSnapshot(q, (snapshot) => {
                 contenedor.innerHTML = '';
-
                 if (snapshot.empty) {
-                    contenedor.innerHTML = '<p class="text-center text-muted">No hay preguntas en el banco.</p>';
+                    contenedor.innerHTML = '<p class="text-center text-warning">No hay preguntas cargadas para esta materia.</p>';
                     return;
                 }
 
-                snapshot.forEach((doc) => {
-                    const data = doc.data();
-                    const qDiv = document.createElement('div');
-                    qDiv.className = 'list-group-item list-group-item-action question-item';
-                    qDiv.innerHTML = `
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    const id = docSnap.id;
+                    const isSelected = preguntasSeleccionadas.includes(id);
+
+                    const item = document.createElement('div');
+                    item.className = `list-group-item list-group-item-action question-item ${isSelected ? 'selected-q' : ''}`;
+                    item.innerHTML = `
                     <div class="d-flex justify-content-between align-items-center">
                         <span>${data.planteamiento}</span>
                         <span class="badge bg-info text-dark">${data.categoria}</span>
                     </div>
                 `;
-                    qDiv.onclick = () => {
-                        if (preguntasSeleccionadas.includes(doc.id)) {
-                            preguntasSeleccionadas = preguntasSeleccionadas.filter(id => id !== doc.id);
-                            qDiv.classList.remove('selected-q');
+
+                    item.onclick = () => {
+                        if (preguntasSeleccionadas.includes(id)) {
+                            preguntasSeleccionadas = preguntasSeleccionadas.filter(i => i !== id);
+                            item.classList.remove('selected-q');
                         } else {
-                            preguntasSeleccionadas.push(doc.id);
-                            qDiv.classList.add('selected-q');
+                            preguntasSeleccionadas.push(id);
+                            item.classList.add('selected-q');
                         }
-                        document.getElementById('countSelected').innerText = preguntasSeleccionadas.length + " Seleccionadas";
+                        actualizarContador();
                     };
-                    contenedor.appendChild(qDiv);
+                    contenedor.appendChild(item);
                 });
             });
+        };
+
+        function actualizarContador() {
+            document.getElementById('countSelected').innerText = `${preguntasSeleccionadas.length} Seleccionadas`;
         }
 
-        // Guardar Examen en Firestore (Colección exams)
+        // 4. Guardar o Actualizar
         document.getElementById('examForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
             if (preguntasSeleccionadas.length === 0) {
-                alert("Debes seleccionar al menos una pregunta.");
+                alert("Selecciona al menos una pregunta.");
                 return;
             }
 
-            // Preparamos los datos del examen[cite: 2]
             const datosExamen = {
+                materia: document.getElementById('materiaExamen').value,
                 titulo: document.getElementById('tituloExamen').value,
                 fechaInicio: document.getElementById('fechaDisponibilidad').value,
                 limiteMinutos: document.getElementById('limiteTiempo').value,
@@ -195,34 +253,21 @@
 
             try {
                 if (examId) {
-                    // Si hay un ID, buscamos los datos en Firebase para llenar el formulario
-                    const docRef = doc(db, "exams", examId);
-                    const docSnap = await getDoc(docRef);
-
-                    if (docSnap.exists()) {
-                        const data = docSnap.exists() ? docSnap.data() : null;
-                        if (data) {
-                            document.getElementById('tituloExamen').value = data.titulo;
-                            document.getElementById('fechaDisponibilidad').value = data.fechaInicio;
-                            document.getElementById('limiteTiempo').value = data.limiteMinutos;
-                            document.getElementById('intentos').value = data.intentosMaximos;
-                            document.getElementById('retroal').value = data.tipoRetro;
-                            // Guardamos las IDs de las preguntas para que aparezcan seleccionadas
-                            preguntasSeleccionadas = data.preguntasIDs || [];
-                            document.querySelector('button[type="submit"]').innerText = "Actualizar Examen";
-                            document.querySelector('button[type="submit"]').className = "btn btn-warning w-100 py-3 shadow";
-                        }
-                    }
+                    await updateDoc(doc(db, "exams", examId), datosExamen);
+                    alert("¡Examen actualizado!");
+                } else {
+                    datosExamen.fechaCreacion = new Date().toISOString();
+                    datosExamen.creadoPor = auth.currentUser.uid;
+                    await addDoc(collection(db, "exams"), datosExamen);
+                    alert("¡Examen publicado!");
                 }
-
                 window.location.href = "dashboard_profesor.html";
             } catch (error) {
-                console.error("Error al procesar el examen: ", error);
-                alert("Hubo un error: " + error.message);
+                console.error("Error al guardar:", error);
+                alert("Error: " + error.message);
             }
         });
     </script>
-
 </body>
 
 </html>
