@@ -77,7 +77,17 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        import {
+            getFirestore,
+            doc,
+            getDoc
+        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        import {
+            getAuth,
+            onAuthStateChanged
+        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
@@ -87,42 +97,276 @@
             messagingSenderId: "1013480049532",
             appId: "1:1013480049532:web:066afa29f8727c7ea332f9"
         };
+
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app);
 
-        const resultID = "ID_DINAMICO_DEL_RESULTADO"; // Este ID vendría de la URL o del estado anterior
+        // =========================
+        // OBTENER ID RESULTADO
+        // =========================
+        const urlParams = new URLSearchParams(window.location.search);
+        const resultID = urlParams.get("id");
 
-        // Cargar información del resultado en tiempo real
-        onSnapshot(doc(db, "results", resultID), (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
+        if (!resultID) {
+            alert("No se encontró el resultado.");
+            window.location.href = "dashboard_estudiante.html";
+        }
 
-                // Actualizar interfaz
-                document.getElementById('calificacion').innerText = data.calificacionFinal || "S/N";
+        onAuthStateChanged(auth, (user) => {
 
-                if (data.comentariosDocente) {
-                    document.getElementById('retroalimentacionDocente').innerText = data.comentariosDocente;
+            if (user) {
+
+                console.log("USUARIO AUTENTICADO");
+
+                cargarResultado();
+
+            } else {
+
+                alert("Debes iniciar sesión");
+
+                window.location.href = "login.html";
+            }
+
+        });
+
+        async function cargarResultado() {
+
+            const lista = document.getElementById("listaRevision");
+
+            try {
+
+                // =========================
+                // TRAER RESULTADO
+                // =========================
+                const resultRef = doc(db, "results", resultID);
+                const resultSnap = await getDoc(resultRef);
+
+                if (!resultSnap.exists()) {
+                    lista.innerHTML = `
+                    <li class="list-group-item text-danger text-center p-4">
+                        No existe el resultado.
+                    </li>
+                `;
+                    return;
                 }
 
-                // Simulación de carga de respuestas revisadas
-                const lista = document.getElementById('listaRevision');
+                const data = resultSnap.data();
+                console.log("DATOS RESULTADO:");
+                console.log(data);
+                console.log("RESULT ID:", resultID);
+
+                console.log("RESULTADO:", data);
+
+                // =========================
+                // DATOS GENERALES
+                // =========================
+                document.getElementById("nombreExamen").innerText =
+                    `${data.materia || "Materia"} - ${data.titulo || "Examen"}`;
+
+                document.getElementById("calificacion").innerText =
+                    data.calificacionFinal ?? "0";
+
+                if (data.comentariosDocente) {
+                    document.getElementById("retroalimentacionDocente").innerText =
+                        data.comentariosDocente;
+                }
+
+                // =========================
+                // VALIDAR ID EXAMEN
+                // =========================
+                if (!data.ID_examen) {
+
+                    lista.innerHTML = `
+                    <li class="list-group-item text-danger text-center p-4">
+                        El resultado no tiene ID_examen.
+                    </li>
+                `;
+
+                    return;
+                }
+
+                // =========================
+                // TRAER EXAMEN
+                // =========================
+                const examRef = doc(db, "exams", data.ID_examen);
+                const examSnap = await getDoc(examRef);
+
+                if (!examSnap.exists()) {
+
+                    lista.innerHTML = `
+                    <li class="list-group-item text-danger text-center p-4">
+                        No existe el examen relacionado.
+                    </li>
+                `;
+
+                    return;
+                }
+
+                const examData = examSnap.data();
+
+                console.log("EXAMEN:", examData);
+
+                // =========================
+                // VALIDAR PREGUNTAS
+                // =========================
+                if (!examData.preguntasIDs || examData.preguntasIDs.length === 0) {
+
+                    lista.innerHTML = `
+                    <li class="list-group-item text-warning text-center p-4">
+                        Este examen no tiene preguntas registradas.
+                    </li>
+                `;
+
+                    return;
+                }
+
                 lista.innerHTML = "";
 
-                // Aquí mapearías las respuestas del estudiante comparadas con la colección 'questions'
-                // Ejemplo visual:
-                lista.innerHTML += `
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="mb-0 fw-bold">1. ¿Qué etiqueta define el cuerpo del documento en HTML?</p>
-                        <small class="text-success">Tu respuesta: &lt;body&gt; (Correcto)</small>
-                    </div>
-                    <i class="bi bi-check-circle-fill text-success fs-4"></i>
+                const respuestasAlumno = data.respuestas || {};
+
+                let contador = 1;
+
+                // =========================
+                // RECORRER PREGUNTAS
+                // =========================
+                for (const preguntaID of examData.preguntasIDs) {
+
+                    try {
+
+                        const preguntaRef = doc(db, "questions", preguntaID);
+                        const preguntaSnap = await getDoc(preguntaRef);
+
+                        if (!preguntaSnap.exists()) {
+                            continue;
+                        }
+
+                        const pregunta = preguntaSnap.data();
+
+                        const respuestaAlumno =
+                            respuestasAlumno[preguntaID] || "Sin respuesta";
+
+                        const respuestaCorrecta =
+                            pregunta.respuestaCorrecta || "No definida";
+
+                        let estadoHTML = `
+    <span class="badge bg-danger">
+        Incorrecta
+    </span>
+`;
+
+                        // =========================
+                        // PREGUNTAS ENSAYO
+                        // =========================
+                        if (pregunta.tipo === "ensayo") {
+
+                            // SI YA EXISTE CALIFICACIÓN FINAL
+                            if (
+                                data.calificacionFinal !== null &&
+                                data.calificacionFinal !== undefined
+                            ) {
+
+                                estadoHTML = `
+            <span class="badge bg-success">
+                Revisada
+            </span>
+        `;
+
+                            } else {
+
+                                estadoHTML = `
+            <span class="badge bg-warning text-dark">
+                Pendiente revisión
+            </span>
+        `;
+                            }
+                        }
+
+                        // =========================
+                        // PREGUNTAS NORMALES
+                        // =========================
+                        else if (respuestaAlumno === respuestaCorrecta) {
+
+                            estadoHTML = `
+        <span class="badge bg-success">
+            Correcta
+        </span>
+    `;
+                        }
+
+                        lista.innerHTML += `
+                        <li class="list-group-item p-4">
+
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+
+                                <h6 class="fw-bold mb-0">
+                                    Pregunta ${contador}
+                                </h6>
+
+                                ${estadoHTML}
+
+                            </div>
+
+                            <p class="mb-3">
+                                ${pregunta.planteamiento}
+                            </p>
+
+                            <div class="mb-2">
+                                <label class="fw-bold">
+                                    Tu respuesta:
+                                </label>
+
+                                <textarea
+                                    class="form-control"
+                                    readonly
+                                >${respuestaAlumno}</textarea>
+                            </div>
+
+                            <div>
+                                <label class="fw-bold text-success">
+                                    Respuesta correcta:
+                                </label>
+
+                                <textarea
+                                    class="form-control"
+                                    readonly
+                                >${respuestaCorrecta}</textarea>
+                            </div>
+
+                        </li>
+                    `;
+
+                        contador++;
+
+                    } catch (errorPregunta) {
+
+                        console.error("ERROR PREGUNTA:", errorPregunta);
+
+                    }
+
+                }
+
+                if (contador === 1) {
+
+                    lista.innerHTML = `
+                    <li class="list-group-item text-center p-4">
+                        No se pudieron cargar preguntas.
+                    </li>
+                `;
+                }
+
+            } catch (error) {
+
+                console.error(error);
+
+                lista.innerHTML = `
+                <li class="list-group-item text-danger text-center p-4">
+                    Error al cargar revisión.
                 </li>
             `;
             }
-        });
+        }
     </script>
-
 </body>
 
 </html>
