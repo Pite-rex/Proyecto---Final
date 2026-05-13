@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <title>Gestión de Usuarios - ExamSys</title>
@@ -15,9 +16,13 @@
             cursor: pointer;
             transition: 0.2s;
         }
-        .img-profile-sm:hover { transform: scale(1.1); }
+
+        .img-profile-sm:hover {
+            transform: scale(1.1);
+        }
     </style>
 </head>
+
 <body class="bg-light">
     <div class="container py-5">
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -40,7 +45,7 @@
                         </tr>
                     </thead>
                     <tbody id="listaGestion">
-                        </tbody>
+                    </tbody>
                 </table>
             </div>
         </div>
@@ -73,7 +78,8 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" onclick="actualizarUsuario()">Actualizar Datos</button>
+                    <button type="button" class="btn btn-primary" onclick="actualizarUsuario()">Actualizar
+                        Datos</button>
                 </div>
             </div>
         </div>
@@ -81,9 +87,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { getAuth, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
+        import { getFirestore, collection, onSnapshot, doc, updateDoc, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, sendPasswordResetEmail, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         const firebaseConfig = {
             apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
             authDomain: "databaseex-238c7.firebaseapp.com",
@@ -97,39 +102,76 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        // Cargar usuarios con foto (Módulo 1)
-        onSnapshot(collection(db, "users"), (snapshot) => {
-            const tbody = document.getElementById('listaGestion');
-            tbody.innerHTML = '';
-            
-            snapshot.forEach((userDoc) => {
-                const u = userDoc.data();
-                // Si no tiene foto (como el Admin), ponemos una imagen por defecto
-                const fotoURL = u.fotoPerfil ? u.fotoPerfil : 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-                
-                tbody.innerHTML += `
-                    <tr>
-                        <td><img src="${fotoURL}" class="img-profile-sm" alt="Perfil"></td>
-                        <td class="fw-bold">${u.nombre}</td>
-                        <td>${u.correo}</td>
-                        <td><span class="badge ${u.rol === 'Administrador' ? 'bg-danger' : 'bg-primary'}">${u.rol}</span></td>
-                        <td>
-                            <div class="btn-group">
-                                <button class="btn btn-sm btn-outline-warning" onclick="abrirModal('${userDoc.id}', '${u.nombre}', '${u.rol}', '${fotoURL}')">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
-                                <button class="btn btn-sm btn-outline-info" onclick="restablecerPass('${u.correo}')" title="Reset Contraseña">
-                                    <i class="bi bi-key"></i>
-                                </button>
-                                <button class="btn btn-sm btn-outline-danger" onclick="eliminarUsuario('${userDoc.id}')">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            });
+        // ==========================================
+        // GUARDIA DE SEGURIDAD ESTRICTO Y SESIÓN
+        // ==========================================
+        onAuthStateChanged(auth, async (user) => {
+            // 1. Si no hay sesión, lo expulsa
+            if (!user) {
+                window.location.href = "index.html";
+                return;
+            }
+
+            // 2. EL GUARDIA ESTRICTO: Bloqueo de acceso directo por URL pegada
+            if (document.referrer === "" || !document.referrer.includes("dashboard_admin.html")) {
+                alert("Acceso denegado. Debes ingresar haciendo clic desde el Panel de Administración.");
+                window.location.href = "index.html";
+                return;
+            }
+
+            // 3. Verificar en Firestore que la cuenta sea realmente de "Administrador"
+            try {
+                const userSnap = await getDoc(doc(db, "users", user.uid));
+                if (userSnap.exists() && userSnap.data().rol === "Administrador") {
+                    // 4. Si pasa toda la seguridad, carga la tabla
+                    cargarGestionUsuarios();
+                } else {
+                    alert("Acceso denegado. No tienes permisos de Administrador.");
+                    window.location.href = "index.html";
+                }
+            } catch (error) {
+                console.error("Error verificando seguridad:", error);
+                window.location.href = "index.html";
+            }
         });
+
+        // Cargar usuarios con foto (Módulo 1)
+        // ==========================================
+        // FUNCIÓN PARA CARGAR USUARIOS (Protegida)
+        // ==========================================
+        function cargarGestionUsuarios() {
+            onSnapshot(collection(db, "users"), (snapshot) => {
+                const tbody = document.getElementById('listaGestion');
+                tbody.innerHTML = '';
+
+                snapshot.forEach((userDoc) => {
+                    const u = userDoc.data();
+                    const fotoURL = u.fotoPerfil ? u.fotoPerfil : 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><img src="${fotoURL}" class="img-profile-sm" alt="Perfil"></td>
+                            <td class="fw-bold">${u.nombre}</td>
+                            <td>${u.correo}</td>
+                            <td><span class="badge ${u.rol === 'Administrador' ? 'bg-danger' : 'bg-primary'}">${u.rol}</span></td>
+                            <td>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-outline-warning" onclick="abrirModal('${userDoc.id}', '${u.nombre}', '${u.rol}', '${fotoURL}')">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-info" onclick="restablecerPass('${u.correo}')" title="Reset Contraseña">
+                                        <i class="bi bi-key"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="eliminarUsuario('${userDoc.id}')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+            });
+        }
 
         window.abrirModal = (id, nombre, rol, foto) => {
             document.getElementById('editUid').value = id;
@@ -152,18 +194,19 @@
         };
 
         window.restablecerPass = async (email) => {
-            if(confirm(`¿Enviar enlace de recuperación a: ${email}?`)) {
+            if (confirm(`¿Enviar enlace de recuperación a: ${email}?`)) {
                 await sendPasswordResetEmail(auth, email);
                 alert("Correo enviado.");
             }
         };
 
         window.eliminarUsuario = async (id) => {
-            if(confirm("¿Eliminar definitivamente a este usuario?")) {
+            if (confirm("¿Eliminar definitivamente a este usuario?")) {
                 await deleteDoc(doc(db, "users", id));
             }
         };
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>
