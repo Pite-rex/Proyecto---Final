@@ -125,7 +125,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, addDoc, onSnapshot, where, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { doc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { doc, deleteDoc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         let editId = null;
 
@@ -143,6 +143,40 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
+        // ==========================================
+        // GUARDIA DE SEGURIDAD ESTRICTO Y SESIÓN
+        // ==========================================
+        onAuthStateChanged(auth, async (user) => {
+            // 1. Si no hay sesión, lo expulsa
+            if (!user) {
+                window.location.href = "index.html";
+                return;
+            }
+
+            // 2. EL GUARDIA ESTRICTO: Bloqueo de acceso directo por URL pegada
+            if (document.referrer === "" || !document.referrer.includes("dashboard_profesor.html")) {
+                alert("Acceso denegado. Debes ingresar haciendo clic desde el Panel del Docente.");
+                window.location.href = "index.html";
+                return;
+            }
+
+            // 3. Verificar en Firestore que la cuenta sea realmente de "Docente"
+            try {
+                const userSnap = await getDoc(doc(db, "users", user.uid));
+                if (!userSnap.exists() || userSnap.data().rol !== "Docente") {
+                    alert("No tienes permisos para ver esta página.");
+                    window.location.href = "index.html";
+                    return;
+                }
+
+                // 4. Si pasa toda la seguridad, carga los datos visuales
+                window.filtrarPreguntasPorMateria();
+
+            } catch (error) {
+                console.error("Error verificando seguridad:", error);
+            }
+        });
+        // ==========================================
 
 
         // Función para mostrar/ocultar opciones según el tipo
@@ -318,9 +352,8 @@
                 });
             });
         };
-        window.filtrarPreguntasPorMateria();
     </script>
-    
+
 
 </body>
 
