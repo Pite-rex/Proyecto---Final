@@ -109,7 +109,6 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        // CORRECCIÓN: Se agregó 'where' en la importación
         import { getFirestore, collection, addDoc, onSnapshot, query, where, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
@@ -130,14 +129,41 @@
         const urlParams = new URLSearchParams(window.location.search);
         const examId = urlParams.get('edit');
 
-        // 1. Verificar Autenticación
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                if (examId) cargarDatosExamen();
-                // Inicializar el banco vacío o con mensaje
-                window.filtrarPreguntasPorMateria();
-            } else {
-                window.location.href = "login.html";
+        // ==========================================
+        // GUARDIA DE SEGURIDAD ESTRICTO Y SESIÓN
+        // ==========================================
+        onAuthStateChanged(auth, async (user) => {
+            // 1. Si no hay sesión iniciada
+            if (!user) {
+                window.location.href = "index.html";
+                return;
+            }
+
+            // 2. EL GUARDIA ESTRICTO: Bloqueo de URL pegada (Referrer check)
+            if (document.referrer === "" || !document.referrer.includes("dashboard_profesor.html")) {
+                alert("Acceso denegado. Debes ingresar haciendo clic desde el Panel del Docente.");
+                window.location.href = "index.html";
+                return;
+            }
+
+            // 3. Verificar Rol en Firestore
+            try {
+                const userSnap = await getDoc(doc(db, "users", user.uid));
+                if (userSnap.exists() && userSnap.data().rol === "Docente") {
+                    
+                    // 4. Si es seguro, inicializar la página
+                    if (examId) {
+                        await cargarDatosExamen();
+                    }
+                    window.filtrarPreguntasPorMateria();
+
+                } else {
+                    alert("No tienes permisos de docente para acceder aquí.");
+                    window.location.href = "index.html";
+                }
+            } catch (error) {
+                console.error("Error en validación de guardia:", error);
+                window.location.href = "index.html";
             }
         });
 
@@ -158,13 +184,11 @@
 
                     preguntasSeleccionadas = data.preguntasIDs || [];
 
-                    // Actualizar UI de edición
                     document.getElementById('pageTitle').innerHTML = '<i class="bi bi-pencil-square me-2"></i>Editar Examen';
                     const btn = document.getElementById('btnSubmit');
                     btn.innerText = "Actualizar Examen";
                     btn.className = "btn btn-warning w-100 py-3 shadow";
 
-                    // Cargar las preguntas de la materia del examen editado
                     window.filtrarPreguntasPorMateria();
                     actualizarContador();
                 }
@@ -173,10 +197,9 @@
             }
         }
 
-        // 3. Función de Filtrado (Corregida)
+        // 3. Función de Filtrado
         window.filtrarPreguntasPorMateria = () => {
             const materia = document.getElementById('materiaExamen').value;
-            // CORRECCIÓN: Usar el ID correcto del HTML 'bancoParaSeleccion'
             const contenedor = document.getElementById('bancoParaSeleccion');
 
             if (!materia) {
