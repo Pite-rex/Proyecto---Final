@@ -51,7 +51,8 @@
                 <ul class="nav flex-column gap-2">
                     <li class="nav-item"><a class="nav-link active" href="#"><i class="bi bi-speedometer2 me-2"></i>
                             Dashboard</a></li>
-                    <li class="nav-item"><a class="nav-link" href="gestion_usuarios.html"><i class="bi bi-people me-2"></i> Gestión de
+                    <li class="nav-item"><a class="nav-link" href="gestion_usuarios.html"><i
+                                class="bi bi-people me-2"></i> Gestión de
                             Usuarios</a></li>
                     <li class="nav-item"><a class="nav-link" href="reportes_analitica.html"><i
                                 class="bi bi-bar-chart-line me-2"></i> Reportes Globales</a></li>
@@ -133,39 +134,67 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Seguridad: Verificar Rol de Admin (RF01)
+        // ==========================================
+        // GUARDIA DE SEGURIDAD ESTRICTO Y SESIÓN
+        // ==========================================
         onAuthStateChanged(auth, async (user) => {
+            // 1. Verificar si el usuario inició sesión
             if (!user) {
                 window.location.href = "index.html";
-            } else {
+                return;
+            }
+
+            // 2. EL GUARDIA ESTRICTO: Bloqueo si pegan el link (Referrer vacío)
+            if (document.referrer === "") {
+                alert("Acceso denegado. Por seguridad, debes iniciar sesión desde la página principal.");
+                window.location.href = "index.html";
+                return;
+            }
+
+            // 3. Verificar Rol de Admin en la base de datos
+            try {
                 const userSnap = await getDoc(doc(db, "users", user.uid));
-                if (userSnap.exists() && userSnap.data().rol !== "Administrador") {
+
+                if (userSnap.exists() && userSnap.data().rol === "Administrador") {
+                    // 4. Si pasa toda la seguridad, entonces (y solo entonces) cargamos los datos
+                    cargarDatosAdmin();
+                } else {
                     alert("Acceso denegado. Se requieren permisos de Administrador.");
                     window.location.href = "index.html";
                 }
+            } catch (error) {
+                console.error("Error al verificar los permisos:", error);
+                window.location.href = "index.html";
             }
         });
 
-        // Cargar Usuarios en Tiempo Real (RF01)
-        onSnapshot(collection(db, "users"), (snapshot) => {
-            const tbody = document.getElementById('userTableBody');
-            tbody.innerHTML = '';
-            document.getElementById('totalUsers').innerText = snapshot.size;
+        // ==========================================
+        // FUNCIÓN PARA CARGAR DATOS (Protegida)
+        // ==========================================
+        function cargarDatosAdmin() {
+            // Cargar Usuarios en Tiempo Real
+            onSnapshot(collection(db, "users"), (snapshot) => {
+                const tbody = document.getElementById('userTableBody');
+                tbody.innerHTML = '';
+                document.getElementById('totalUsers').innerText = snapshot.size;
 
-            snapshot.forEach((doc) => {
-                const data = doc.data();
-                tbody.innerHTML += `
-                <tr>
-                    <td>${data.nombre}</td>
-                    <td>${data.correo}</td>
-                    <td><span class="badge ${data.rol === 'Administrador' ? 'bg-danger' : 'bg-primary'}">${data.rol}</span></td>
-                    <td>${new Date(data.fechaRegistro).toLocaleDateString()}</td>
-                    
-                </tr>
-            `;
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    tbody.innerHTML += `
+                    <tr>
+                        <td>${data.nombre}</td>
+                        <td>${data.correo}</td>
+                        <td><span class="badge ${data.rol === 'Administrador' ? 'bg-danger' : 'bg-primary'}">${data.rol}</span></td>
+                        <td>${new Date(data.fechaRegistro).toLocaleDateString()}</td>
+                    </tr>
+                `;
+                });
             });
-        });
+        }
 
+        // ==========================================
+        // CERRAR SESIÓN
+        // ==========================================
         document.getElementById('btnLogout').addEventListener('click', () => {
             signOut(auth).then(() => window.location.href = "index.html");
         });
