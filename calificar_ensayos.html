@@ -49,9 +49,37 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        onAuthStateChanged(auth, (user) => {
-            if (!user) window.location.href = "index.html";
-            else cargarEnsayosPendientes();
+        // ==========================================
+        // GUARDIA DE SEGURIDAD ESTRICTO Y SESIÓN
+        // ==========================================
+        onAuthStateChanged(auth, async (user) => {
+            // 1. Si no hay sesión, lo manda al index
+            if (!user) {
+                window.location.href = "index.html";
+                return;
+            }
+
+            // 2. EL GUARDIA ESTRICTO: Bloqueo si pegan el link manualmente
+            if (document.referrer === "" || !document.referrer.includes("dashboard_profesor.html")) {
+                alert("Acceso denegado. Debes ingresar haciendo clic desde el Panel del Docente.");
+                window.location.href = "index.html";
+                return;
+            }
+
+            // 3. Verificar Rol de Docente
+            try {
+                const userSnap = await getDoc(doc(db, "users", user.uid));
+                if (userSnap.exists() && userSnap.data().rol === "Docente") {
+                    // 4. Solo si es docente y viene del panel, cargamos los ensayos
+                    cargarEnsayosPendientes();
+                } else {
+                    alert("No tienes permisos de docente para acceder aquí.");
+                    window.location.href = "index.html";
+                }
+            } catch (error) {
+                console.error("Error en validación:", error);
+                window.location.href = "index.html";
+            }
         });
 
         function cargarEnsayosPendientes() {
