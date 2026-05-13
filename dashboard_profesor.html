@@ -155,46 +155,81 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Seguridad: Verificar que el usuario esté logueado (Módulo 1)
-        onAuthStateChanged(auth, (user) => {
-            if (!user) window.location.href = "index.html";
+        // ==========================================
+        // GUARDIA DE SEGURIDAD ESTRICTO Y SESIÓN
+        // ==========================================
+        onAuthStateChanged(auth, async (user) => {
+            // 1. Si no hay sesión iniciada
+            if (!user) {
+                window.location.href = "index.html";
+                return;
+            }
+
+            // 2. EL GUARDIA ESTRICTO: Bloqueo de URL pegada en nueva pestaña
+            if (document.referrer === "") {
+                alert("Acceso denegado. Por seguridad, debes iniciar sesión desde la página principal.");
+                window.location.href = "index.html";
+                return;
+            }
+
+            // 3. Verificar Rol de Docente en Firestore
+            try {
+                const userSnap = await getDoc(doc(db, "users", user.uid));
+                if (userSnap.exists() && userSnap.data().rol === "Docente") {
+                    // 4. Si pasa toda la seguridad, cargamos la tabla de exámenes
+                    cargarExamenes();
+                } else {
+                    alert("Acceso denegado. Se requieren permisos de Docente.");
+                    window.location.href = "index.html";
+                }
+            } catch (error) {
+                console.error("Error verificando permisos:", error);
+                window.location.href = "index.html";
+            }
         });
 
-        // Cargar Exámenes en tiempo real (Quitamos orderBy para evitar ocultar documentos corruptos/antiguos)
-        const q = query(collection(db, "exams"));
-        onSnapshot(q, (snapshot) => {
-            const tbody = document.getElementById('listaExamenes');
-            tbody.innerHTML = '';
+        // ==========================================
+        // FUNCIÓN PARA CARGAR LOS EXÁMENES (Protegida)
+        // ==========================================
+        function cargarExamenes() {
+            const q = query(collection(db, "exams"));
+            onSnapshot(q, (snapshot) => {
+                const tbody = document.getElementById('listaExamenes');
+                tbody.innerHTML = '';
 
-            const examenes = [];
-            snapshot.forEach((doc) => examenes.push({ id: doc.id, ...doc.data() }));
+                const examenes = [];
+                snapshot.forEach((docSnap) => examenes.push({ id: docSnap.id, ...docSnap.data() }));
 
-            // Ordenamos localmente por fecha de creación (los más recientes primero)
-            examenes.sort((a, b) => new Date(b.fechaCreacion || 0) - new Date(a.fechaCreacion || 0));
+                // Ordenamos localmente por fecha de creación (los más recientes primero)
+                examenes.sort((a, b) => new Date(b.fechaCreacion || 0) - new Date(a.fechaCreacion || 0));
 
-            examenes.forEach((examen) => {
-                const titulo = examen.titulo || "Examen sin título";
-                const fecha = examen.fechaInicio ? new Date(examen.fechaInicio).toLocaleDateString() : "Sin fecha";
+                examenes.forEach((examen) => {
+                    // Mostramos la materia junto al título (Ej: Matemáticas - Primer Parcial)
+                    const titulo = examen.materia ? `${examen.materia} - ${examen.titulo}` : (examen.titulo || "Examen sin título");
+                    const fecha = examen.fechaInicio ? new Date(examen.fechaInicio).toLocaleDateString() : "Sin fecha";
 
-                tbody.innerHTML += `
-    <tr>
-        <td>${titulo}</td>
-        <td>${fecha}</td>
-        <td><span class="badge bg-success">Activo</span></td>
-        <td>
-            <button class="btn btn-sm btn-outline-primary" onclick="monitorearExamen('${examen.id}')" title="Monitorear"><i class="bi bi-eye"></i></button>
-            <button class="btn btn-sm btn-outline-warning" onclick="window.location.href='crear_examen.html?edit=${examen.id}'" title="Editar"><i class="bi bi-pencil"></i></button>
-            <button class="btn btn-sm btn-outline-danger" onclick="eliminarExamen('${examen.id}')" title="Eliminar"><i class="bi bi-trash"></i></button>
-        </td>
-    </tr>
-`;
+                    tbody.innerHTML += `
+                    <tr>
+                        <td class="fw-bold text-dark">${titulo}</td>
+                        <td>${fecha}</td>
+                        <td><span class="badge bg-success">Activo</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="monitorearExamen('${examen.id}')" title="Monitorear"><i class="bi bi-eye"></i></button>
+                            <button class="btn btn-sm btn-outline-warning" onclick="window.location.href='crear_examen.html?edit=${examen.id}'" title="Editar"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="eliminarExamen('${examen.id}')" title="Eliminar"><i class="bi bi-trash"></i></button>
+                        </td>
+                    </tr>
+                    `;
+                });
+            }, (error) => {
+                console.error("Error al obtener los exámenes: ", error);
+                alert("No se pudieron cargar los exámenes. Revisa la consola para más detalles.");
             });
-        }, (error) => {
-            console.error("Error al obtener los exámenes: ", error);
-            alert("No se pudieron cargar los exámenes. Revisa la consola para más detalles.");
-        });
+        }
 
-        // Función para eliminar examen
+        // ==========================================
+        // FUNCIONES DE BOTONES (Monitorear y Eliminar)
+        // ==========================================
         window.eliminarExamen = async (id) => {
             if (confirm("¿Estás seguro de que deseas eliminar este examen? Esta acción no se puede deshacer.")) {
                 try {
@@ -206,7 +241,6 @@
             }
         };
 
-        // Función para ver quién está haciendo el examen
         window.monitorearExamen = (id) => {
             const modal = new bootstrap.Modal(document.getElementById('modalMonitoreo'));
             modal.show();
