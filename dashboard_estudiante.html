@@ -81,8 +81,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
+        import { getFirestore, collection, onSnapshot, query, where, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         const firebaseConfig = {
             apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
             authDomain: "databaseex-238c7.firebaseapp.com",
@@ -96,13 +95,36 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        onAuthStateChanged(auth, (user) => {
+        
+        onAuthStateChanged(auth, async (user) => {
+            // 1. Si no hay sesión iniciada
             if (!user) {
                 window.location.href = "index.html";
-            } else {
-                document.getElementById('userIdDisplay').innerText = user.email;
-                // Pasamos el usuario a las funciones de carga
-                cargarDashboardCompleto(user);
+                return;
+            }
+
+            // 2. EL GUARDIA ESTRICTO: Bloqueo de URL pegada (Referrer check)
+            if (document.referrer === "") {
+                alert("Acceso denegado. Por seguridad, debes iniciar sesión desde la página principal.");
+                window.location.href = "index.html";
+                return;
+            }
+
+            // 3. Verificar Rol en Firestore
+            try {
+                const userSnap = await getDoc(doc(db, "users", user.uid));
+                
+                if (userSnap.exists() && userSnap.data().rol === "Estudiante") {
+                    // 4. Si es seguro y es estudiante, inicializar la página
+                    document.getElementById('userIdDisplay').innerText = user.email;
+                    cargarDashboardCompleto(user);
+                } else {
+                    alert("Acceso denegado. No tienes permisos de Estudiante para acceder aquí.");
+                    window.location.href = "index.html";
+                }
+            } catch (error) {
+                console.error("Error validando el rol:", error);
+                window.location.href = "index.html";
             }
         });
 
