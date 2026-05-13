@@ -120,11 +120,16 @@
                 return;
             }
 
-            // =========================
-            // GUARDIA DE SEGURIDAD (URL PEGADA)
-            // =========================
-            if (document.referrer === "") {
-                alert("Acceso denegado. No puedes ingresar copiando y pegando el enlace directamente.");
+            // ==========================================
+            // GUARDIA DE SEGURIDAD ESTRICTO (MULTI-ROL)
+            // ==========================================
+            const ref = document.referrer;
+            if (ref === "" ||
+                (!ref.includes("dashboard_estudiante.html") &&
+                    !ref.includes("ejecucion_examen.html") &&
+                    !ref.includes("reportes_analitica.html"))) {
+
+                alert("Acceso denegado. Navegación no autorizada hacia los resultados.");
                 window.location.href = "index.html";
                 return;
             }
