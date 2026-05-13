@@ -149,18 +149,27 @@
 
         onAuthStateChanged(auth, async (user) => {
             // 1. Verificar si hay sesión
+            // ==========================================
+            // GUARDIA DE SEGURIDAD ESTRICTO Y SESIÓN
+            // ==========================================
+
+            // 1. Verificar si hay sesión
             if (!user) {
                 window.location.href = "index.html";
                 return;
             }
 
-            // 2. Guardia de Seguridad (Bloqueo de URL pegada)
-            if (document.referrer === "") {
-                alert("Acceso denegado. No puedes ingresar copiando y pegando el enlace directamente.");
+            // 2. EL GUARDIA ESTRICTO: Solo permite entrar si vienes de paneles oficiales o de ver un resultado
+            const ref = document.referrer;
+            if (ref === "" ||
+                (!ref.includes("dashboard_profesor.html") &&
+                    !ref.includes("dashboard_admin.html") &&
+                    !ref.includes("revision_resultados.html"))) {
+
+                alert("Acceso denegado. Debes navegar correctamente desde tu Panel.");
                 window.location.href = "index.html";
                 return;
             }
-
             try {
                 // 3. Obtener el rol del usuario desde Firestore
                 const userSnap = await getDoc(doc(db, "users", user.uid));
