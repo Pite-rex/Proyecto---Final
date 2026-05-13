@@ -54,172 +54,200 @@
     </div>
 
     <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, doc, getDoc, updateDoc, collection, addDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, doc, getDoc, updateDoc, collection, addDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-    const firebaseConfig = {
-        apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
-        authDomain: "databaseex-238c7.firebaseapp.com",
-        projectId: "databaseex-238c7",
-        storageBucket: "databaseex-238c7.firebasestorage.app",
-        messagingSenderId: "1013480049532",
-        appId: "1:1013480049532:web:066afa29f8727c7ea332f9"
-    };
+        const firebaseConfig = {
+            apiKey: "AIzaSyCtg1t8wDvbGJggV4M6hWsBsg__kaoIAYE",
+            authDomain: "databaseex-238c7.firebaseapp.com",
+            projectId: "databaseex-238c7",
+            storageBucket: "databaseex-238c7.firebasestorage.app",
+            messagingSenderId: "1013480049532",
+            appId: "1:1013480049532:web:066afa29f8727c7ea332f9"
+        };
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth(app);
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const examID = urlParams.get('id');
-    let resultID = "";
-    let preguntasDataLocal = {}; // Para comparar respuestas al final
-    let materiaExamen = "";
+        const urlParams = new URLSearchParams(window.location.search);
+        const examID = urlParams.get('id');
+        let resultID = "";
+        let preguntasDataLocal = {}; // Para comparar respuestas al final
+        let materiaExamen = "";
 
-    onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-            window.location.href = "login.html";
-        } else if (examID) {
-            await cargarExamen(user);
-        } else {
-            alert("Examen no válido.");
-            window.location.href = "dashboard_estudiante.html";
-        }
-    });
-
-    async function cargarExamen(user) {
-        try {
-            const examSnap = await getDoc(doc(db, "exams", examID));
-            if (!examSnap.exists()) return;
-
-            const examData = examSnap.data();
-            materiaExamen = examData.materia;
-            document.getElementById('tituloExamen').innerText = `${examData.materia}: ${examData.titulo}`;
-            startTimer(examData.limiteMinutos * 60);
-
-            // Verificar si ya se completó (Seguridad extra)
-            const qVerificar = query(collection(db, "results"), 
-                where("ID_estudiante", "==", user.uid),
-                where("ID_examen", "==", examID),
-                where("estado", "==", "finalizado")
-            );
-            const checkSnap = await getDocs(qVerificar);
-            if (!checkSnap.empty) {
-                alert("Ya has realizado esta evaluación.");
-                window.location.href = "dashboard_estudiante.html";
+        // ==========================================
+        // GUARDIA DE SEGURIDAD ESTRICTO Y SESIÓN
+        // ==========================================
+        onAuthStateChanged(auth, async (user) => {
+            // 1. Si no hay sesión iniciada
+            if (!user) {
+                window.location.href = "index.html";
                 return;
             }
 
-            // Crear registro de inicio
-            const resRef = await addDoc(collection(db, "results"), {
-                ID_estudiante: user.uid,
-                ID_examen: examID,
-                materia: examData.materia,
-                tituloExamen: examData.titulo,
-                estado: "en_progreso",
-                fechaInicio: new Date().toISOString()
-            });
-            resultID = resRef.id;
-
-            const contenedor = document.getElementById('contenedorPreguntas');
-            contenedor.innerHTML = '';
-
-            // Cargar preguntas y guardar sus respuestas correctas localmente para calificar
-            for (const pID of examData.preguntasIDs) {
-                const qSnap = await getDoc(doc(db, "questions", pID));
-                if (qSnap.exists()) {
-                    const qData = qSnap.data();
-                    preguntasDataLocal[pID] = qData; // Guardamos para calificar después
-                    renderPregunta(pID, qData, contenedor);
-                }
+            // 2. EL GUARDIA ESTRICTO: Evitar links compartidos o pegados
+            // Solo permite entrar si el usuario acaba de hacer clic desde su dashboard
+            if (document.referrer === "" || !document.referrer.includes("dashboard_estudiante.html")) {
+                alert("Acceso denegado. Debes iniciar la evaluación desde tu Portal de Estudiante.");
+                window.location.href = "index.html";
+                return;
             }
-        } catch (e) {
-            console.error(e);
+
+            // 3. Verificar Rol de Estudiante en la base de datos
+            try {
+                const userSnap = await getDoc(doc(db, "users", user.uid));
+
+                if (userSnap.exists() && userSnap.data().rol === "Estudiante") {
+                    // 4. Si es seguro, verificamos que la URL tenga un ID de examen válido
+                    if (examID) {
+                        await cargarExamen(user);
+                    } else {
+                        alert("Examen no válido.");
+                        window.location.href = "dashboard_estudiante.html";
+                    }
+                } else {
+                    alert("Acceso denegado. Solo los estudiantes pueden realizar evaluaciones.");
+                    window.location.href = "index.html";
+                }
+            } catch (error) {
+                console.error("Error en validación de seguridad:", error);
+                window.location.href = "index.html";
+            }
+        });
+        async function cargarExamen(user) {
+            try {
+                const examSnap = await getDoc(doc(db, "exams", examID));
+                if (!examSnap.exists()) return;
+
+                const examData = examSnap.data();
+                materiaExamen = examData.materia;
+                document.getElementById('tituloExamen').innerText = `${examData.materia}: ${examData.titulo}`;
+                startTimer(examData.limiteMinutos * 60);
+
+                // Verificar si ya se completó (Seguridad extra)
+                const qVerificar = query(collection(db, "results"),
+                    where("ID_estudiante", "==", user.uid),
+                    where("ID_examen", "==", examID),
+                    where("estado", "==", "finalizado")
+                );
+                const checkSnap = await getDocs(qVerificar);
+                if (!checkSnap.empty) {
+                    alert("Ya has realizado esta evaluación.");
+                    window.location.href = "dashboard_estudiante.html";
+                    return;
+                }
+
+                // Crear registro de inicio
+                const resRef = await addDoc(collection(db, "results"), {
+                    ID_estudiante: user.uid,
+                    ID_examen: examID,
+                    materia: examData.materia,
+                    tituloExamen: examData.titulo,
+                    estado: "en_progreso",
+                    fechaInicio: new Date().toISOString()
+                });
+                resultID = resRef.id;
+
+                const contenedor = document.getElementById('contenedorPreguntas');
+                contenedor.innerHTML = '';
+
+                // Cargar preguntas y guardar sus respuestas correctas localmente para calificar
+                for (const pID of examData.preguntasIDs) {
+                    const qSnap = await getDoc(doc(db, "questions", pID));
+                    if (qSnap.exists()) {
+                        const qData = qSnap.data();
+                        preguntasDataLocal[pID] = qData; // Guardamos para calificar después
+                        renderPregunta(pID, qData, contenedor);
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+            }
         }
-    }
 
-    function renderPregunta(id, data, contenedor) {
-        const div = document.createElement('div');
-        div.className = 'card pregunta-card shadow-sm p-4';
-        let html = `<h5 class="mb-3">${data.planteamiento}</h5>`;
+        function renderPregunta(id, data, contenedor) {
+            const div = document.createElement('div');
+            div.className = 'card pregunta-card shadow-sm p-4';
+            let html = `<h5 class="mb-3">${data.planteamiento}</h5>`;
 
-        if (data.tipo === 'opcion_multiple') {
-            data.opciones.forEach(opt => {
-                html += `<div class="form-check mb-2">
+            if (data.tipo === 'opcion_multiple') {
+                data.opciones.forEach(opt => {
+                    html += `<div class="form-check mb-2">
                     <input class="form-check-input" type="radio" name="${id}" value="${opt}" required>
                     <label class="form-check-label">${opt}</label>
                 </div>`;
-            });
-        } else if (data.tipo === 'verdadero_falso') {
-            html += `
+                });
+            } else if (data.tipo === 'verdadero_falso') {
+                html += `
                 <div class="form-check"><input class="form-check-input" type="radio" name="${id}" value="Verdadero" required><label class="form-check-label">Verdadero</label></div>
                 <div class="form-check"><input class="form-check-input" type="radio" name="${id}" value="Falso" required><label class="form-check-label">Falso</label></div>`;
-        } else {
-            html += `<textarea name="${id}" class="form-control" rows="3" placeholder="Escribe tu respuesta..." required></textarea>`;
-        }
-        div.innerHTML = html;
-        contenedor.appendChild(div);
-    }
-
-    function startTimer(duration) {
-        let timer = duration;
-        const display = document.getElementById('time');
-        const interval = setInterval(() => {
-            let mins = Math.floor(timer / 60);
-            let secs = timer % 60;
-            display.textContent = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-            if (--timer < 0) {
-                clearInterval(interval);
-                alert("Tiempo agotado. El examen se enviará automáticamente.");
-                enviarExamen();
-            }
-        }, 1000);
-    }
-
-    async function enviarExamen() {
-        const form = document.getElementById('quizForm');
-        const formData = new FormData(form);
-        const respuestasUser = Object.fromEntries(formData.entries());
-        
-        let aciertos = 0;
-        let totalPreguntas = Object.keys(preguntasDataLocal).length;
-        let requiereRevisionManual = false;
-
-        // Calificación automática
-        for (const pID in preguntasDataLocal) {
-            const pregunta = preguntasDataLocal[pID];
-            if (pregunta.tipo !== 'ensayo') {
-                if (respuestasUser[pID] === pregunta.respuestaCorrecta) {
-                    aciertos++;
-                }
             } else {
-                requiereRevisionManual = true;
+                html += `<textarea name="${id}" class="form-control" rows="3" placeholder="Escribe tu respuesta..." required></textarea>`;
             }
+            div.innerHTML = html;
+            contenedor.appendChild(div);
         }
 
-        // Calcular nota base 10
-        let nota = totalPreguntas > 0 ? ((aciertos / totalPreguntas) * 10).toFixed(1) : 0;
+        function startTimer(duration) {
+            let timer = duration;
+            const display = document.getElementById('time');
+            const interval = setInterval(() => {
+                let mins = Math.floor(timer / 60);
+                let secs = timer % 60;
+                display.textContent = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+                if (--timer < 0) {
+                    clearInterval(interval);
+                    alert("Tiempo agotado. El examen se enviará automáticamente.");
+                    enviarExamen();
+                }
+            }, 1000);
+        }
 
-        await updateDoc(doc(db, "results", resultID), {
-            respuestas: respuestasUser,
-            estado: "finalizado",
-            fechaTermino: new Date().toISOString(),
-            calificacionFinal: requiereRevisionManual ? null : nota,
-            puntos: aciertos,
-            totalItems: totalPreguntas,
-            requiereRevision: requiereRevisionManual
+        async function enviarExamen() {
+            const form = document.getElementById('quizForm');
+            const formData = new FormData(form);
+            const respuestasUser = Object.fromEntries(formData.entries());
+
+            let aciertos = 0;
+            let totalPreguntas = Object.keys(preguntasDataLocal).length;
+            let requiereRevisionManual = false;
+
+            // Calificación automática
+            for (const pID in preguntasDataLocal) {
+                const pregunta = preguntasDataLocal[pID];
+                if (pregunta.tipo !== 'ensayo') {
+                    if (respuestasUser[pID] === pregunta.respuestaCorrecta) {
+                        aciertos++;
+                    }
+                } else {
+                    requiereRevisionManual = true;
+                }
+            }
+
+            // Calcular nota base 10
+            let nota = totalPreguntas > 0 ? ((aciertos / totalPreguntas) * 10).toFixed(1) : 0;
+
+            await updateDoc(doc(db, "results", resultID), {
+                respuestas: respuestasUser,
+                estado: "finalizado",
+                fechaTermino: new Date().toISOString(),
+                calificacionFinal: requiereRevisionManual ? null : nota,
+                puntos: aciertos,
+                totalItems: totalPreguntas,
+                requiereRevision: requiereRevisionManual
+            });
+
+            alert("Examen finalizado correctamente.");
+            window.location.href = `revision_resultados.html?id=${resultID}`;
+        }
+
+        document.getElementById('quizForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (confirm("¿Estás seguro de finalizar la evaluación?")) enviarExamen();
         });
-
-        alert("Examen finalizado correctamente.");
-        window.location.href = `revision_resultados.html?id=${resultID}`;
-    }
-
-    document.getElementById('quizForm').addEventListener('submit', (e) => {
-        e.preventDefault();
-        if (confirm("¿Estás seguro de finalizar la evaluación?")) enviarExamen();
-    });
-</script>
+    </script>
 
 </body>
 
