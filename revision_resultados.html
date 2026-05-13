@@ -69,7 +69,7 @@
                 </div>
 
                 <div class="text-center mt-4">
-                    <a href="dashboard_estudiante.html" class="btn btn-primary px-5">Volver a mis cursos</a>
+                    <a href="#" id="btnVolver" class="btn btn-primary px-5">Cargando...</a>
                 </div>
             </div>
         </div>
@@ -77,7 +77,6 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-
         import {
             getFirestore,
             doc,
@@ -110,23 +109,53 @@
 
         if (!resultID) {
             alert("No se encontró el resultado.");
-            window.location.href = "dashboard_estudiante.html";
+            window.location.href = "index.html";
         }
 
-        onAuthStateChanged(auth, (user) => {
+        onAuthStateChanged(auth, async (user) => {
 
-            if (user) {
-
-                console.log("USUARIO AUTENTICADO");
-
-                cargarResultado();
-
-            } else {
-
+            if (!user) {
                 alert("Debes iniciar sesión");
-
-                window.location.href = "login.html";
+                window.location.href = "index.html";
+                return;
             }
+
+            // =========================
+            // GUARDIA DE SEGURIDAD (URL PEGADA)
+            // =========================
+            if (document.referrer === "") {
+                alert("Acceso denegado. No puedes ingresar copiando y pegando el enlace directamente.");
+                window.location.href = "index.html";
+                return;
+            }
+
+            // =========================
+            // LÓGICA DEL BOTÓN VOLVER SEGÚN ROL
+            // =========================
+            try {
+                const userDocSnap = await getDoc(doc(db, "users", user.uid));
+                const btnVolver = document.getElementById('btnVolver');
+
+                if (userDocSnap.exists() && userDocSnap.data().rol === "Docente") {
+                    if (btnVolver) {
+                        btnVolver.href = "reportes_analitica.html";
+                        btnVolver.innerText = "Volver a Analítica";
+                    }
+                } else {
+                    if (btnVolver) {
+                        btnVolver.href = "dashboard_estudiante.html";
+                        btnVolver.innerText = "Volver a Mis Cursos";
+                    }
+                }
+            } catch (err) {
+                console.error("Error al verificar rol:", err);
+            }
+
+            // =========================
+            // SI PASA LOS FILTROS, CARGAMOS LOS DATOS
+            // =========================
+            console.log("USUARIO AUTENTICADO");
+            cargarResultado();
 
         });
 
@@ -152,17 +181,14 @@
                 }
 
                 const data = resultSnap.data();
-                console.log("DATOS RESULTADO:");
-                console.log(data);
+                console.log("DATOS RESULTADO:", data);
                 console.log("RESULT ID:", resultID);
-
-                console.log("RESULTADO:", data);
 
                 // =========================
                 // DATOS GENERALES
                 // =========================
                 document.getElementById("nombreExamen").innerText =
-                    `${data.materia || "Materia"} - ${data.titulo || "Examen"}`;
+                    `${data.materia || "Materia"} - ${data.tituloExamen || data.titulo || "Examen"}`;
 
                 document.getElementById("calificacion").innerText =
                     data.calificacionFinal ?? "0";
@@ -204,7 +230,6 @@
                 }
 
                 const examData = examSnap.data();
-
                 console.log("EXAMEN:", examData);
 
                 // =========================
@@ -322,7 +347,8 @@
                                 >${respuestaAlumno}</textarea>
                             </div>
 
-                            <div>
+                            ${pregunta.tipo !== 'ensayo' && respuestaAlumno !== respuestaCorrecta ? `
+                            <div class="mt-3">
                                 <label class="fw-bold text-success">
                                     Respuesta correcta:
                                 </label>
@@ -331,7 +357,7 @@
                                     class="form-control"
                                     readonly
                                 >${respuestaCorrecta}</textarea>
-                            </div>
+                            </div>` : ''}
 
                         </li>
                     `;
@@ -339,13 +365,14 @@
                         contador++;
 
                     } catch (errorPregunta) {
-
                         console.error("ERROR PREGUNTA:", errorPregunta);
-
                     }
 
                 }
 
+                // =========================
+                // SI NO HUBO PREGUNTAS
+                // =========================
                 if (contador === 1) {
 
                     lista.innerHTML = `
